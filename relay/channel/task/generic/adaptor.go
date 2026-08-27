@@ -78,8 +78,11 @@ func (a *TaskAdaptor) BuildRequestHeader(c *gin.Context, req *http.Request, info
 
 func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
 	storage, err := common.GetBodyStorage(c)
-	if err == nil && storage != nil && storage.Len() > 0 {
-		return bytes.NewReader(storage.Bytes()), nil
+	if err == nil && storage != nil {
+		data, bErr := storage.Bytes()
+		if bErr == nil && len(data) > 0 {
+			return bytes.NewReader(data), nil
+		}
 	}
 	v, exists := c.Get("task_request")
 	if !exists {
