@@ -8,7 +8,6 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/tidwall/gjson"
 )
 
 // RunExpr compiles (with cache) and executes an expression string.
