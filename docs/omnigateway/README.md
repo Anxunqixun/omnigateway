@@ -1,5 +1,7 @@
 # Omnigateway 二次开发说明
 
+完整说明已放在仓库根目录 [README.md](../../README.md)（GitHub 首页会显示那一份）。
+
 本仓库是 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) **v1.0.0-rc.26** 的下游二次开发，上游品牌、版权、许可证与署名保持不变（AGPLv3）。
 
 不要把生产环境的镜像跟踪为 `calciumion/new-api:latest`。升级时在锁定标签上 cherry-pick 官方补丁，再重新构建本仓库镜像。

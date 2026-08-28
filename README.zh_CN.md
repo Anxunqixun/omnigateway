@@ -6,10 +6,12 @@
 
 🍥 **新一代大模型网关与AI资产管理系统**
 
+> **本仓库二次开发说明在 GitHub 首页：[README.md](./README.md)**（公式售价、用户模型倍率、文档管理、GHCR 镜像）。下面是上游官方中文说明。
+
 <p align="center">
   简体中文 |
   <a href="./README.zh_TW.md">繁體中文</a> |
-  <a href="./README.md">English</a> |
+  <a href="./README.upstream.md">English</a> |
   <a href="./README.fr.md">Français</a> |
   <a href="./README.ja.md">日本語</a>
 </p>
@@ -60,8 +62,6 @@
 > - 使用者必须合法取得上游 API Key、账号、模型服务或接口权限，并遵守上游服务条款及适用法律法规。
 > - 使用者应确保其使用方式符合上游服务条款及适用法律法规。
 > - 面向公众提供生成式人工智能服务时，使用者应遵守[《生成式人工智能服务管理暂行办法》](http://www.cac.gov.cn/2023-07/13/c_1690898327029107.htm)等监管要求，自行完成所在司法辖区要求的备案、许可、内容安全、实名、日志留存、税务和上游授权等合规义务。
-
-> 本仓库是 QuantumNous/new-api **v1.0.0-rc.26** 的下游二次开发。二次开发功能、GHCR 镜像与部署说明见 [docs/omnigateway/README.md](docs/omnigateway/README.md)。
 
 ---
 
