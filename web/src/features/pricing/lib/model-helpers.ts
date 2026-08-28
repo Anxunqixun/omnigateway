@@ -94,6 +94,14 @@ export function getDisplayGroupRatio(
   return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
 }
 
+export function getUserModelSellRatio(model: PricingModel): number {
+  const ratio = model.user_model_ratio
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio < 0) {
+    return 1
+  }
+  return ratio
+}
+
 /**
  * Replace model placeholder in endpoint path
  */

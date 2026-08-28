@@ -1226,3 +1226,133 @@ func TestSettle_NonPerCallBilling_AppliesAdaptorAdjustment(t *testing.T) {
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 }
+
+func TestSettle_PerCallBilling_WritesFrozenCostWithoutChangingSell(t *testing.T) {
+	truncate(t)
+	common.QuotaPerUnit = 500000
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 41, 41, 41
+	const initQuota, preConsumed = 10000, 5000
+	const tokenRemain = 8000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-percall-cost", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.PerCallBilling = true
+	task.PrivateData.BillingContext.CostExpr = "v2:0.1"
+	task.PrivateData.BillingContext.RequestBody = []byte(`{"seconds":4}`)
+
+	adaptor := &mockAdaptor{adjustReturn: 2000}
+	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
+	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, []byte(`{"data":{"duration":10}}`))
+
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, preConsumed, task.Quota)
+	require.Equal(t, int64(1), countLogs(t))
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	require.NotNil(t, log.CostQuota)
+	assert.Equal(t, 50000, *log.CostQuota)
+	assert.Equal(t, 0, log.Quota)
+}
+
+func TestSettle_TokenModePoll_WritesCostWhenNoTokenDelta(t *testing.T) {
+	truncate(t)
+	common.QuotaPerUnit = 500000
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 42, 42, 42
+	const initQuota, preConsumed = 10000, 4000
+	const tokenRemain = 7000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-token-cost", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.CostExpr = `v2:num(resp("data.duration"), 0) * 0.01`
+	task.PrivateData.BillingContext.RequestBody = []byte(`{"seconds":4}`)
+
+	adaptor := &mockAdaptor{adjustReturn: 0}
+	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
+	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, []byte(`{"data":{"duration":10}}`))
+
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	assert.Equal(t, preConsumed, task.Quota)
+	require.Equal(t, int64(1), countLogs(t))
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	require.NotNil(t, log.CostQuota)
+	assert.Equal(t, 50000, *log.CostQuota)
+}
+
+func TestSettle_ExprBillingUsesPollDuration(t *testing.T) {
+	truncate(t)
+	common.QuotaPerUnit = 500000
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 43, 43, 43
+	const initQuota, preConsumed = 100000, 20000
+	const tokenRemain = 80000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-expr-poll", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.BillingMode = "tiered_expr"
+	task.PrivateData.BillingContext.ExprString = `v2:num(resp("data.duration"), param("seconds"), 0) * 0.01`
+	task.PrivateData.BillingContext.GroupRatio = 1
+	task.PrivateData.BillingContext.QuotaPerUnit = 500000
+	task.PrivateData.BillingContext.RequestBody = []byte(`{"seconds":4}`)
+	task.PrivateData.BillingContext.CostExpr = "v2:0.002"
+
+	adaptor := &mockAdaptor{adjustReturn: 9999}
+	taskResult := &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}
+	settleTaskBillingOnComplete(ctx, adaptor, task, taskResult, []byte(`{"data":{"duration":10}}`))
+
+	assert.Equal(t, initQuota-(50000-preConsumed), getUserQuota(t, userID))
+	assert.Equal(t, 50000, task.Quota)
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	require.NotNil(t, log.CostQuota)
+	assert.Equal(t, 1000, *log.CostQuota)
+}
+
+func TestSettle_ExprBillingRefundIncludesGroupAndUserRatio(t *testing.T) {
+	truncate(t)
+	common.QuotaPerUnit = 500000
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 44, 44, 44
+	const initQuota, preConsumed = 200000, 30000
+	const tokenRemain = 80000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-expr-ratio", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, preConsumed, tokenID, BillingSourceWallet, 0)
+	task.PrivateData.BillingContext.BillingMode = "formula"
+	task.PrivateData.BillingContext.ExprString = `v2:num(resp("task.usage.input_seconds"), param("input_seconds"), 0) * 0.01`
+	// ExprVersion left at 0 on purpose: settle must recover v2 from the prefix.
+	task.PrivateData.BillingContext.GroupRatio = 2
+	task.PrivateData.BillingContext.UserModelRatio = 0.5
+	task.PrivateData.BillingContext.HasUserModelRatio = true
+	task.PrivateData.BillingContext.QuotaPerUnit = 500000
+	task.PrivateData.BillingContext.RequestBody = []byte(`{"input_seconds":6}`)
+
+	settleTaskBillingOnComplete(ctx, &mockAdaptor{}, task, &relaycommon.TaskInfo{Status: model.TaskStatusSuccess}, []byte(`{"task":{"usage":{"input_seconds":2}}}`))
+
+	// 底价 0.02 * 500000 = 10000，再乘分组 2 和用户 0.5 → 10000
+	assert.Equal(t, 10000, task.Quota)
+	assert.Equal(t, initQuota-(10000-preConsumed), getUserQuota(t, userID))
+	log := getLastLog(t)
+	require.NotNil(t, log)
+	assert.Equal(t, model.LogTypeRefund, log.Type)
+	assert.Equal(t, preConsumed-10000, log.Quota)
+}

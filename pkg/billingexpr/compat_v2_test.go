@@ -3,6 +3,8 @@ package billingexpr
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseExprVersionV2(t *testing.T) {
@@ -53,6 +55,34 @@ func TestRespAndUsageAlias(t *testing.T) {
 	if math.Abs(cost-want) > 1e-9 {
 		t.Fatalf("cost=%f want %f", cost, want)
 	}
+}
+
+func TestCountListAndExtraOverFive(t *testing.T) {
+	cost, _, err := RunExprWithRequest(
+		`v2:0.04 + max(count("images")-5, 0)*0.01`,
+		TokenParams{},
+		RequestInput{Body: []byte(`{"images":["a","b","c","d","e","f","g"]}`)},
+	)
+	require.NoError(t, err)
+	require.InDelta(t, 0.06, cost, 1e-9)
+
+	nCost, _, err := RunExprWithRequest(
+		`v2:0.04 + max(count("n")-5, 0)*0.01`,
+		TokenParams{},
+		RequestInput{Body: []byte(`{"n":8}`)},
+	)
+	require.NoError(t, err)
+	require.InDelta(t, 0.07, nCost, 1e-9)
+}
+
+func TestCountMissingPathIsZero(t *testing.T) {
+	cost, _, err := RunExprWithRequest(
+		`v2:count("images")`,
+		TokenParams{},
+		RequestInput{Body: []byte(`{}`)},
+	)
+	require.NoError(t, err)
+	require.InDelta(t, 0, cost, 1e-9)
 }
 
 func TestCoalescePrefersFirstPresent(t *testing.T) {

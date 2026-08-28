@@ -104,6 +104,7 @@ type User struct {
 	DeletedAt        gorm.DeletedAt             `gorm:"index"`
 	LinuxDOId        string                     `json:"linux_do_id" gorm:"column:linux_do_id;index"`
 	Setting          string                     `json:"setting" gorm:"type:text;column:setting"`
+	ModelRatio       string                     `json:"model_ratio,omitempty" gorm:"type:text;column:model_ratio"`
 	Remark           string                     `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string                     `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt        int64                      `json:"created_at" gorm:"autoCreateTime;column:created_at"`
@@ -121,6 +122,7 @@ func (user *User) ToBaseUser() *UserBase {
 		Role:        user.Role,
 		Username:    user.Username,
 		Setting:     user.Setting,
+		ModelRatio:  user.ModelRatio,
 		Email:       user.Email,
 		AuthVersion: user.AuthVersion,
 		CacheSchema: userCacheSchemaVersion,
@@ -249,6 +251,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"enabled":    true,
 			"channel":    true,
 			"models":     true,
+			"api_docs":   true,
 			"redemption": true,
 			"user":       true,
 			"setting":    false, // 管理员不能访问系统设置
@@ -259,6 +262,7 @@ func generateDefaultSidebarConfigForRole(userRole int) string {
 			"enabled":    true,
 			"channel":    true,
 			"models":     true,
+			"api_docs":   true,
 			"redemption": true,
 			"user":       true,
 			"setting":    true,
@@ -842,6 +846,7 @@ func (user *User) EditWithTx(tx *gorm.DB, updatePassword bool) error {
 		"display_name": newUser.DisplayName,
 		"group":        newUser.Group,
 		"remark":       newUser.Remark,
+		"model_ratio":  newUser.ModelRatio,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

@@ -34,6 +34,13 @@ func attachQuotaSaturationToOther(other map[string]interface{}, clamp *common.Qu
 	adminInfo["quota_saturation"] = clamp.AuditMap()
 }
 
+func attachUserModelRatio(other map[string]interface{}, priceData hosttypes.PriceData) {
+	if other == nil || !priceData.HasUserModelRatio {
+		return
+	}
+	other["user_model_ratio"] = priceData.UserModelRatio
+}
+
 // attachQuotaSaturation records the request's quota clamp (if any) onto the
 // consume log's other.admin_info and emits a request-correlated backend audit
 // line. Called right before RecordConsumeLog on the text/audio/wss paths.
@@ -74,6 +81,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	other := make(map[string]interface{})
 	other["model_ratio"] = modelRatio
 	other["group_ratio"] = groupRatio
+	attachUserModelRatio(other, relayInfo.PriceData)
 	other["completion_ratio"] = completionRatio
 	other["cache_tokens"] = cacheTokens
 	other["cache_ratio"] = cacheRatio
@@ -294,6 +302,7 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData hosttypes.P
 	other := make(map[string]interface{})
 	other["model_price"] = priceData.ModelPrice
 	other["group_ratio"] = priceData.GroupRatioInfo.GroupRatio
+	attachUserModelRatio(other, priceData)
 	if priceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = priceData.GroupRatioInfo.GroupSpecialRatio
 	}
@@ -312,7 +321,10 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	if snap == nil {
 		return
 	}
-	other["billing_mode"] = "tiered_expr"
+	other["billing_mode"] = snap.BillingMode
+	if snap.BillingMode == "" {
+		other["billing_mode"] = "tiered_expr"
+	}
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier

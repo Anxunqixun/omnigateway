@@ -100,6 +100,7 @@ func runProgram(prog *vm.Program, requestRules []RequestRuleTrace, params TokenP
 			return lookupUsageAlias(request, alias)
 		},
 		"num":      numVals,
+		"count":    func(path string) float64 { return countPath(request.Body, path) },
 		"coalesce": coalesceVals,
 		"has": func(source interface{}, substr string) bool {
 			if source == nil || substr == "" {

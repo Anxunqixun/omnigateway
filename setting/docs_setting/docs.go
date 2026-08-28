@@ -15,11 +15,13 @@ type HandbookPage struct {
 }
 
 type DocsSetting struct {
-	Handbook []HandbookPage `json:"handbook"`
+	Handbook    []HandbookPage  `json:"handbook"`
+	Standalone  []StandaloneDoc `json:"standalone"`
 }
 
 var docsSetting = DocsSetting{
-	Handbook: defaultHandbook(),
+	Handbook:   defaultHandbook(),
+	Standalone: defaultStandalone(),
 }
 
 func init() {

@@ -54,6 +54,7 @@ export type PricingModel = {
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */
   billing_expr?: string
+  user_model_ratio?: number
   price_hint?: 'estimate' | string
   /** Pricing version returned by backend, useful for cache busting */
   pricing_version?: string

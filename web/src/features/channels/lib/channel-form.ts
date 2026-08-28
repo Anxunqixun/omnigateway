@@ -36,6 +36,12 @@ import {
   stringifyAdvancedCustomConfig,
   validateAdvancedCustomConfig,
 } from './advanced-custom'
+import {
+  channelApiDocsSchema,
+  emptyChannelApiDocs,
+  parseChannelApiDocs,
+  serializeChannelApiDocs,
+} from './channel-api-docs'
 
 // ============================================================================
 // Form Validation Schema
@@ -282,6 +288,7 @@ export const channelFormSchema = z
     upstream_model_update_check_enabled: z.boolean().optional(),
     upstream_model_update_auto_sync_enabled: z.boolean().optional(),
     upstream_model_update_ignored_models: z.string().optional(),
+    api_docs: channelApiDocsSchema,
   })
   .superRefine((data, ctx) => {
     if (
@@ -454,6 +461,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
   advanced_custom: '',
+  api_docs: emptyChannelApiDocs(),
 }
 
 // ============================================================================
@@ -518,6 +526,7 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateAutoSyncEnabled = false
   let upstreamModelUpdateIgnoredModels = ''
   let advancedCustom = ''
+  let apiDocs = emptyChannelApiDocs()
 
   if (channel.settings) {
     try {
@@ -546,6 +555,7 @@ export function transformChannelToFormDefaults(
       if (parsed.advanced_custom) {
         advancedCustom = stringifyAdvancedCustomConfig(parsed.advanced_custom)
       }
+      apiDocs = parseChannelApiDocs(parsed.api_docs)
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to parse channel settings:', error)
@@ -597,6 +607,7 @@ export function transformChannelToFormDefaults(
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
     advanced_custom: advancedCustom,
+    api_docs: apiDocs,
   }
 }
 
@@ -761,6 +772,13 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     }
   } else if ('advanced_custom' in settingsObj) {
     delete settingsObj.advanced_custom
+  }
+
+  const apiDocs = serializeChannelApiDocs(formData.api_docs)
+  if (apiDocs) {
+    settingsObj.api_docs = apiDocs
+  } else if ('api_docs' in settingsObj) {
+    delete settingsObj.api_docs
   }
 
   return JSON.stringify(settingsObj)

@@ -221,3 +221,19 @@ func TestUserAuthVersionFenceAndCommittedFloorAreMonotonic(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "5", committed)
 }
+
+func TestWriteUserCachePersistsModelRatio(t *testing.T) {
+	useUserCacheMiniRedis(t)
+	const userID = 4203
+	require.NoError(t, writeUserCache(&UserBase{
+		Id:          userID,
+		Group:       "default",
+		Username:    "ratio-user",
+		AuthVersion: 1,
+		ModelRatio:  `{"sora-2":1.2}`,
+	}, true))
+
+	cached, err := GetUserCache(userID)
+	require.NoError(t, err)
+	assert.Equal(t, `{"sora-2":1.2}`, cached.ModelRatio)
+}

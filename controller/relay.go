@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -24,6 +25,7 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -592,8 +594,10 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.NodeName = common.NodeName
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      relayInfo.PriceData.ModelPrice,
-			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-			ModelRatio:      relayInfo.PriceData.ModelRatio,
+			GroupRatio:        relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+			UserModelRatio:    relayInfo.PriceData.UserModelRatio,
+			HasUserModelRatio: relayInfo.PriceData.HasUserModelRatio,
+			ModelRatio:        relayInfo.PriceData.ModelRatio,
 			OtherRatios:     relayInfo.PriceData.OtherRatios(),
 			OriginModelName: relayInfo.OriginModelName,
 			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
@@ -603,10 +607,14 @@ func RelayTask(c *gin.Context) {
 			task.PrivateData.BillingContext.ExprString = snap.ExprString
 			task.PrivateData.BillingContext.ExprVersion = snap.ExprVersion
 			task.PrivateData.BillingContext.QuotaPerUnit = snap.QuotaPerUnit
-			if relayInfo.BillingRequestInput != nil {
-				task.PrivateData.BillingContext.RequestBody = append([]byte(nil), relayInfo.BillingRequestInput.Body...)
-			}
 			task.PrivateData.BillingContext.PerCallBilling = false
+		}
+		if relayInfo.BillingRequestInput != nil && len(task.PrivateData.BillingContext.RequestBody) == 0 {
+			task.PrivateData.BillingContext.RequestBody = append([]byte(nil), relayInfo.BillingRequestInput.Body...)
+		}
+		if costExpr, ok := billing_setting.GetCostExpr(relayInfo.OriginModelName); ok && strings.TrimSpace(costExpr) != "" {
+			task.PrivateData.BillingContext.CostExpr = costExpr
+			task.PrivateData.BillingContext.CostExprVersion = billingexpr.ExprVersion(costExpr)
 		}
 		task.Quota = result.Quota
 		task.Data = result.TaskData

@@ -30,6 +30,19 @@ type PriceData struct {
 	Quota                int // 按次计费的最终额度（MJ / Task）
 	QuotaToPreConsume    int // 按量计费的预消耗额度
 	GroupRatioInfo       GroupRatioInfo
+	UserModelRatio       float64
+	HasUserModelRatio    bool
+}
+
+func (p PriceData) EffectiveUserModelRatio() float64 {
+	if !p.HasUserModelRatio {
+		return 1
+	}
+	return p.UserModelRatio
+}
+
+func (p PriceData) SellRatio() float64 {
+	return p.GroupRatioInfo.GroupRatio * p.EffectiveUserModelRatio()
 }
 
 func (p *PriceData) AddOtherRatio(key string, ratio float64) {

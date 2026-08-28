@@ -11,9 +11,18 @@ import (
 const (
 	BillingModeRatio      = "ratio"
 	BillingModeTieredExpr = "tiered_expr"
+	BillingModeFormula    = "formula"
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
+	CostExprField         = "cost_expr"
 )
+
+// UsesExprSell reports whether the sell price is computed from a billing
+// expression. Official visual expressions and the site formula mode share
+// the same engine but stay distinct billing_mode values.
+func UsesExprSell(mode string) bool {
+	return mode == BillingModeTieredExpr || mode == BillingModeFormula
+}
 
 // BillingSetting is managed by config.GlobalConfig.Register.
 // DB keys: billing_setting.billing_mode, billing_setting.billing_expr
@@ -84,12 +93,15 @@ func GetBillingExprCopy() map[string]string {
 }
 
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 2)
+	extra := make(map[string]any, 3)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
 	if exprs := GetBillingExprCopy(); len(exprs) > 0 {
 		extra[BillingExprField] = exprs
+	}
+	if costs := GetCostExprCopy(); len(costs) > 0 {
+		extra[CostExprField] = costs
 	}
 	return lo.Assign(base, extra)
 }

@@ -20,7 +20,11 @@ import { formatCurrencyFromUSD } from '@/lib/currency'
 
 import { QUOTA_TYPE_VALUES, TOKEN_UNIT_DIVISORS } from '../constants'
 import type { PricingModel, TokenUnit, PriceType } from '../types'
-import { getConfiguredGroupRatio, getDisplayGroupRatio } from './model-helpers'
+import {
+  getConfiguredGroupRatio,
+  getDisplayGroupRatio,
+  getUserModelSellRatio,
+} from './model-helpers'
 
 // ----------------------------------------------------------------------------
 // Price Calculation Utilities
@@ -65,7 +69,7 @@ function calculateTokenPrice(
   type: PriceType,
   ratio: number
 ): number {
-  const base = model.model_ratio * 2 * ratio
+  const base = model.model_ratio * 2 * ratio * getUserModelSellRatio(model)
 
   switch (type) {
     case 'input':
@@ -223,7 +227,8 @@ export function formatFixedPrice(
   }
 
   const ratio = getConfiguredGroupRatio(groupRatio, group)
-  let priceInUSD = (model.model_price || 0) * ratio
+  let priceInUSD =
+    (model.model_price || 0) * ratio * getUserModelSellRatio(model)
 
   priceInUSD = applyRechargeRate(
     priceInUSD,
@@ -255,7 +260,10 @@ export function formatRequestPrice(
 
   const displayGroupRatio = getDisplayGroupRatio(model, selectedGroup)
 
-  let priceInUSD = (model.model_price || 0) * displayGroupRatio
+  let priceInUSD =
+    (model.model_price || 0) *
+    displayGroupRatio *
+    getUserModelSellRatio(model)
 
   priceInUSD = applyRechargeRate(
     priceInUSD,

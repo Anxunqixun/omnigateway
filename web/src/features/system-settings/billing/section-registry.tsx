@@ -23,7 +23,6 @@ import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
 import { PaymentSettingsSection } from '../integrations/payment-settings-section'
 import { RatioSettingsCard } from '../models/ratio-settings-card'
-import { ExprSandboxSection } from './expr-sandbox-section'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -39,6 +38,7 @@ const getModelDefaults = (settings: BillingSettings) => ({
   ExposeRatioEnabled: settings.ExposeRatioEnabled,
   BillingMode: settings['billing_setting.billing_mode'],
   BillingExpr: settings['billing_setting.billing_expr'],
+  CostExpr: settings['billing_setting.cost_expr'] || '{}',
 })
 
 const getGroupDefaults = (settings: BillingSettings) => ({
@@ -186,15 +186,6 @@ const BILLING_SECTIONS = [
           confirmedAt: settings['payment_setting.compliance_confirmed_at'] ?? 0,
           confirmedBy: settings['payment_setting.compliance_confirmed_by'] ?? 0,
         }}
-      />
-    ),
-  },
-  {
-    id: 'expr-sandbox',
-    titleKey: 'Expression sandbox',
-    build: (settings: BillingSettings) => (
-      <ExprSandboxSection
-        costExprDefault={settings['billing_setting.cost_expr'] || '{}'}
       />
     ),
   },

@@ -32,11 +32,18 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.HeaderNavModuleAuth("pricing"), controller.GetPricing)
+		docsAdminRoute := apiRouter.Group("/docs/admin")
+		docsAdminRoute.Use(middleware.AdminAuth())
+		{
+			docsAdminRoute.GET("", controller.GetAdminStandaloneDocs)
+			docsAdminRoute.PUT("", controller.PutAdminStandaloneDocs)
+			docsAdminRoute.PUT("/channel/:id", controller.PutAdminChannelDocs)
+			docsAdminRoute.DELETE("/channel/:id", controller.DeleteAdminChannelDocs)
+		}
 		docsRoute := apiRouter.Group("/docs")
 		docsRoute.Use(middleware.HeaderNavModuleAuth("docs"))
 		{
 			docsRoute.GET("/", controller.GetDocsCatalog)
-			docsRoute.GET("/templates", middleware.AdminAuth(), controller.GetDocsTemplate)
 			docsRoute.GET("/:slug", controller.GetDocsPage)
 		}
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")

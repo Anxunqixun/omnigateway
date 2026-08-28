@@ -59,7 +59,7 @@ func aliasBillingFields(view []byte) []byte {
 	if duration := firstExisting(view, "duration", "seconds", "durationSeconds"); duration != "" {
 		out, _ = sjson.SetBytes(out, "duration", coerceFormValue(duration))
 	}
-	return out
+	return applyBillingOnlyInputSeconds(out)
 }
 
 func firstExisting(body []byte, paths ...string) string {

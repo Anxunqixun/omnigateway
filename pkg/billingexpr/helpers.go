@@ -8,6 +8,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+const maxBillingListCount = 256
+
 func gjsonLookup(body []byte, path string) interface{} {
 	path = strings.TrimSpace(path)
 	if path == "" || len(body) == 0 {
@@ -18,6 +20,40 @@ func gjsonLookup(body []byte, path string) interface{} {
 		return nil
 	}
 	return result.Value()
+}
+
+func countPath(body []byte, path string) float64 {
+	path = strings.TrimSpace(path)
+	if path == "" || len(body) == 0 {
+		return 0
+	}
+	result := gjson.GetBytes(body, path)
+	if !result.Exists() {
+		return 0
+	}
+	var n float64
+	switch {
+	case result.IsArray():
+		n = float64(len(result.Array()))
+	case result.Type == gjson.Number:
+		n = result.Float()
+	case result.IsObject():
+		count := 0
+		result.ForEach(func(_, _ gjson.Result) bool {
+			count++
+			return true
+		})
+		n = float64(count)
+	default:
+		return 0
+	}
+	if n < 0 {
+		return 0
+	}
+	if n > maxBillingListCount {
+		return maxBillingListCount
+	}
+	return n
 }
 
 func lookupUsageAlias(request RequestInput, alias string) interface{} {

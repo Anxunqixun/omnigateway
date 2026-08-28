@@ -30,4 +30,8 @@ export {
   USER_FORM_DEFAULT_VALUES,
   transformFormDataToPayload,
   transformUserToFormDefaults,
+  parseUserModelRatioRows,
+  serializeUserModelRatioRows,
+  createUserModelRatioRow,
+  type UserModelRatioRow,
 } from './user-form'

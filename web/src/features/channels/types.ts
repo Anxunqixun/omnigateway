@@ -109,6 +109,8 @@ export interface ChannelOtherSettings {
   upstream_model_update_last_check_time?: number
   upstream_model_update_last_detected_models?: string[]
   advanced_custom?: AdvancedCustomConfig
+  TaskGeneric?: unknown
+  api_docs?: unknown
 }
 
 export interface AdvancedCustomConfig {

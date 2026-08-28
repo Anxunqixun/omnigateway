@@ -28,6 +28,7 @@ import {
 } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -61,6 +62,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
 import { cn } from '@/lib/utils'
 
 import {
@@ -81,6 +84,8 @@ import {
 } from './model-pricing-core'
 import { PriceInput, PriceLane } from './model-pricing-inputs'
 import { formatPricingNumber } from './pricing-format'
+import { ExprTryCalc } from './expr-try-calc'
+import { FormulaGuide } from './formula-guide'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 export type { ModelRatioData } from './model-pricing-core'
@@ -154,7 +159,9 @@ export const ModelPricingEditorPanel = forwardRef<
     ...EMPTY_LANE_ENABLED,
   })
   const [billingExpr, setBillingExpr] = useState('')
+  const [formulaExpr, setFormulaExpr] = useState('')
   const [requestRuleExpr, setRequestRuleExpr] = useState('')
+  const [costExpr, setCostExpr] = useState('')
   const [editorReloadToken, setEditorReloadToken] = useState(0)
   const isEditMode = !!editData
 
@@ -188,15 +195,21 @@ export const ModelPricingEditorPanel = forwardRef<
         audioRatio: editData.audioRatio || '',
         audioCompletionRatio: editData.audioCompletionRatio || '',
       })
-      setPricingMode(
-        editData.billingMode === 'tiered_expr'
-          ? 'tiered_expr'
-          : editData.price
-            ? 'per-request'
-            : 'per-token'
-      )
+      let nextMode: PricingMode = 'per-token'
+      if (editData.billingMode === 'tiered_expr') {
+        nextMode = 'tiered_expr'
+      } else if (editData.billingMode === 'formula') {
+        nextMode = 'formula'
+      } else if (editData.price) {
+        nextMode = 'per-request'
+      }
+      setPricingMode(nextMode)
       setBillingExpr(editData.billingExpr || '')
+      setFormulaExpr(
+        editData.billingMode === 'formula' ? editData.billingExpr || '' : ''
+      )
       setRequestRuleExpr(editData.requestRuleExpr || '')
+      setCostExpr(editData.costExpr || '')
     } else {
       form.reset({
         name: '',
@@ -211,7 +224,9 @@ export const ModelPricingEditorPanel = forwardRef<
       })
       setPricingMode('per-token')
       setBillingExpr('')
+      setFormulaExpr('')
       setRequestRuleExpr('')
+      setCostExpr('')
     }
 
     setPromptPrice(nextLaneState.promptPrice)
@@ -346,15 +361,18 @@ export const ModelPricingEditorPanel = forwardRef<
       buildPreviewRows(
         watchedValues,
         pricingMode,
-        billingExpr,
+        pricingMode === 'formula' ? formulaExpr : billingExpr,
         requestRuleExpr,
         promptPrice,
         lanePrices,
         laneEnabled,
+        costExpr,
         t
       ),
     [
       billingExpr,
+      costExpr,
+      formulaExpr,
       laneEnabled,
       lanePrices,
       pricingMode,
@@ -435,8 +453,13 @@ export const ModelPricingEditorPanel = forwardRef<
       return false
     }
 
+    if (pricingMode === 'formula' && formulaExpr.trim() === '') {
+      toast.error(t('Enter a site formula'))
+      return false
+    }
+
     return true
-  }, [form, laneEnabled, lanePrices, pricingMode, promptPrice, t])
+  }, [form, formulaExpr, laneEnabled, lanePrices, pricingMode, promptPrice, t])
 
   const buildSubmitData = useCallback(
     (values: ModelPricingFormValues) => {
@@ -457,10 +480,14 @@ export const ModelPricingEditorPanel = forwardRef<
         data.billingExpr = billingExpr
         data.requestRuleExpr = requestRuleExpr
       }
+      if (pricingMode === 'formula') {
+        data.billingExpr = formulaExpr
+      }
+      data.costExpr = costExpr
 
       return data
     },
-    [billingExpr, pricingMode, requestRuleExpr]
+    [billingExpr, costExpr, formulaExpr, pricingMode, requestRuleExpr]
   )
 
   useImperativeHandle(
@@ -544,7 +571,7 @@ export const ModelPricingEditorPanel = forwardRef<
                   onValueChange={handleModeChange}
                   className='gap-4'
                 >
-                  <TabsList className='grid w-full grid-cols-3'>
+                  <TabsList className='grid h-auto w-full grid-cols-2 sm:grid-cols-4'>
                     <TabsTrigger value='per-token'>
                       {t('Per-token')}
                     </TabsTrigger>
@@ -554,6 +581,7 @@ export const ModelPricingEditorPanel = forwardRef<
                     <TabsTrigger value='tiered_expr'>
                       {t('Expression')}
                     </TabsTrigger>
+                    <TabsTrigger value='formula'>{t('Formula')}</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value='per-token' className='pt-0'>
@@ -641,6 +669,11 @@ export const ModelPricingEditorPanel = forwardRef<
 
                   <TabsContent value='tiered_expr' className='pt-0'>
                     <FieldGroup className='gap-5'>
+                      <p className='text-muted-foreground text-sm'>
+                        {t(
+                          'This formula is the model base price only. Group ratio and user-group ratio still stack after it, same as token and request prices.'
+                        )}
+                      </p>
                       <TieredPricingEditor
                         key={editorReloadToken}
                         modelName={watchedValues.name}
@@ -651,7 +684,57 @@ export const ModelPricingEditorPanel = forwardRef<
                       />
                     </FieldGroup>
                   </TabsContent>
+
+                  <TabsContent value='formula' className='pt-0'>
+                    <FieldGroup className='gap-5'>
+                      <p className='text-muted-foreground text-sm'>
+                        {t(
+                          'Site formula billing. Uses v2/param/resp/usage. Not the official expression editor.'
+                        )}
+                      </p>
+                      <Field>
+                        <FieldLabel>{t('Formula')}</FieldLabel>
+                        <Textarea
+                          rows={6}
+                          className='font-mono text-xs'
+                          value={formulaExpr}
+                          onChange={(event) =>
+                            setFormulaExpr(event.target.value)
+                          }
+                          placeholder='v2:0.01'
+                        />
+                      </Field>
+                      <FormulaGuide />
+                    </FieldGroup>
+                  </TabsContent>
                 </Tabs>
+                <Field>
+                  <FieldLabel>{t('Cost expression')}</FieldLabel>
+                  <Textarea
+                    rows={4}
+                    className='font-mono text-xs'
+                    value={costExpr}
+                    onChange={(event) => setCostExpr(event.target.value)}
+                    placeholder={t(
+                      'Optional. Same language as the sell formula. Never uses group ratio.'
+                    )}
+                  />
+                  <FieldDescription>
+                    {t(
+                      'Cost formula is independent of the sell mode. You can add it to token, request, expression, or formula pricing.'
+                    )}
+                  </FieldDescription>
+                </Field>
+                <ExprTryCalc
+                  modelName={watchedValues.name}
+                  sellMode={pricingMode}
+                  sellExpr={
+                    pricingMode === 'formula'
+                      ? formulaExpr
+                      : combineBillingExpr(billingExpr, requestRuleExpr)
+                  }
+                  costExpr={costExpr}
+                />
               </FieldGroup>
 
               <aside className='bg-muted/20 sticky top-0 rounded-lg border'>

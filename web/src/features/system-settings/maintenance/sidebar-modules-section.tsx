@@ -138,6 +138,10 @@ export function SidebarModulesSection({
         title: t('Models'),
         description: t('Manage catalog visibility and pricing.'),
       },
+      api_docs: {
+        title: t('API docs'),
+        description: t('Write public API endpoints and guide articles.'),
+      },
       redemption: {
         title: t('Redeem codes'),
         description: t('Create and review invite or credit codes.'),

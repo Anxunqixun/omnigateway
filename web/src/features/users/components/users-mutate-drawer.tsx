@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { Pencil } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -86,10 +86,12 @@ import {
   userFormSchema,
   type UserFormValues,
   USER_FORM_DEFAULT_VALUES,
+  createUserModelRatioRow,
+  serializeUserModelRatioRows,
   transformFormDataToPayload,
   transformUserToFormDefaults,
 } from '../lib'
-import { type User } from '../types'
+import type { User } from '../types'
 import { UserQuotaDialog } from './user-quota-dialog'
 import { useUsers } from './users-provider'
 
@@ -136,16 +138,20 @@ export function UsersMutateDrawer({
   useEffect(() => {
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
-      getUser(currentRow.id).then((result) => {
-        if (result.success && result.data) {
-          form.reset(transformUserToFormDefaults(result.data))
-        }
-      })
+      void getUser(currentRow.id)
+        .then((result) => {
+          if (result.success && result.data) {
+            form.reset(transformUserToFormDefaults(result.data))
+          }
+        })
+        .catch(() => {
+          toast.error(t(ERROR_MESSAGES.UNEXPECTED))
+        })
     } else if (open && !isUpdate) {
       // For create, reset to defaults
       form.reset(USER_FORM_DEFAULT_VALUES)
     }
-  }, [open, isUpdate, currentRow, form])
+  }, [open, isUpdate, currentRow, form, t])
 
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
@@ -166,6 +172,17 @@ export function UsersMutateDrawer({
         })
         return
       }
+    }
+
+    const serialized = serializeUserModelRatioRows(
+      data.model_ratio_rows ?? []
+    )
+    if (!serialized.ok) {
+      form.setError('model_ratio_rows', {
+        type: 'manual',
+        message: t(serialized.message),
+      })
+      return
     }
 
     setIsSubmitting(true)
@@ -195,7 +212,7 @@ export function UsersMutateDrawer({
               : t(ERROR_MESSAGES.CREATE_FAILED))
         )
       }
-    } catch (_error) {
+    } catch {
       toast.error(t(ERROR_MESSAGES.UNEXPECTED))
     } finally {
       setIsSubmitting(false)
@@ -278,7 +295,8 @@ export function UsersMutateDrawer({
                             { value: '10', label: t('Admin') },
                           ]}
                           onValueChange={(value) =>
-                            value !== null && field.onChange(parseInt(value))
+                            value !== null &&
+                            field.onChange(Number.parseInt(value, 10))
                           }
                           value={String(field.value)}
                         >
@@ -346,6 +364,92 @@ export function UsersMutateDrawer({
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name='model_ratio_rows'
+                  render={({ field }) => {
+                    const rows = field.value ?? []
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('Model sell ratios')}</FormLabel>
+                        <FormDescription>
+                          {t(
+                            'Applied after the group ratio. Does not replace group ratios. Unlisted models stay 1. 0 means free for this user and model.'
+                          )}
+                        </FormDescription>
+                        <div className='space-y-2'>
+                          {rows.map((row, index) => (
+                            <div
+                              key={row.id}
+                              className='flex items-start gap-2'
+                            >
+                              <Input
+                                value={row.model}
+                                placeholder={t('Model name')}
+                                onChange={(event) => {
+                                  const next = [...rows]
+                                  next[index] = {
+                                    ...row,
+                                    model: event.target.value,
+                                  }
+                                  field.onChange(next)
+                                }}
+                              />
+                              <Input
+                                inputMode='decimal'
+                                value={row.ratio}
+                                placeholder='1'
+                                className='w-24'
+                                aria-label={t('Model sell ratios')}
+                                onChange={(event) => {
+                                  const next = [...rows]
+                                  next[index] = {
+                                    ...row,
+                                    ratio: event.target.value,
+                                  }
+                                  field.onChange(next)
+                                }}
+                              />
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='icon'
+                                aria-label={t('Remove')}
+                                onClick={() => {
+                                  const next = rows.filter(
+                                    (_, i) => i !== index
+                                  )
+                                  field.onChange(
+                                    next.length > 0
+                                      ? next
+                                      : [createUserModelRatioRow()]
+                                  )
+                                }}
+                              >
+                                <Trash2 className='h-4 w-4' />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            type='button'
+                            variant='outline'
+                            onClick={() =>
+                              field.onChange([
+                                ...rows,
+                                createUserModelRatioRow(),
+                              ])
+                            }
+                          >
+                            <Plus className='mr-1 h-4 w-4' />
+                            {t('Add model ratio')}
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
+                />
               </SideDrawerSection>
 
               {/* Group & Quota Settings (Update only) */}
@@ -360,12 +464,10 @@ export function UsersMutateDrawer({
                       <FormItem>
                         <FormLabel>{t('Group')}</FormLabel>
                         <Select
-                          items={[
-                            ...groups.map((group) => ({
-                              value: group,
-                              label: group,
-                            })),
-                          ]}
+                          items={groups.map((group) => ({
+                            value: group,
+                            label: group,
+                          }))}
                           onValueChange={field.onChange}
                           value={field.value}
                         >
@@ -447,6 +549,7 @@ export function UsersMutateDrawer({
                       </FormItem>
                     )}
                   />
+
                 </SideDrawerSection>
               )}
 

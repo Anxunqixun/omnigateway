@@ -116,6 +116,8 @@ type TaskPrivateData struct {
 type TaskBillingContext struct {
 	ModelPrice      float64            `json:"model_price,omitempty"`       // 模型单价
 	GroupRatio      float64            `json:"group_ratio,omitempty"`       // 分组倍率
+	UserModelRatio  float64            `json:"user_model_ratio,omitempty"`  // 管理员为该用户指定的模型售价倍率
+	HasUserModelRatio bool             `json:"has_user_model_ratio,omitempty"`
 	ModelRatio      float64            `json:"model_ratio,omitempty"`       // 模型倍率
 	OtherRatios     map[string]float64 `json:"other_ratios,omitempty"`      // 附加倍率（时长、分辨率等）
 	OriginModelName string             `json:"origin_model_name,omitempty"` // 模型名称，必须为OriginModelName
@@ -123,9 +125,18 @@ type TaskBillingContext struct {
 	BillingMode     string             `json:"billing_mode,omitempty"`
 	ExprString      string             `json:"expr_string,omitempty"`
 	ExprVersion     int                `json:"expr_version,omitempty"`
+	CostExpr        string             `json:"cost_expr,omitempty"`
+	CostExprVersion int                `json:"cost_expr_version,omitempty"`
 	QuotaPerUnit    float64            `json:"quota_per_unit,omitempty"`
 	RequestBody      []byte `json:"request_body,omitempty"`
 	LastResponseBody []byte `json:"last_response_body,omitempty"`
+}
+
+func (bc *TaskBillingContext) EffectiveUserModelRatio() float64 {
+	if bc == nil || !bc.HasUserModelRatio {
+		return 1
+	}
+	return bc.UserModelRatio
 }
 
 // GetUpstreamTaskID 获取上游真实 task ID（用于与 provider 通信）

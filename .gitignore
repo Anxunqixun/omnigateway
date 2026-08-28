@@ -37,6 +37,9 @@ skills-lock.json
 
 # Local-only live probes and scratch test workspaces.
 .local-tests/
+# Local docker save dumps. Publish images via GHCR, do not commit tarballs.
+/*.tar
+/*.tar.gz
 service/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work

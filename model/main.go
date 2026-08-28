@@ -352,6 +352,9 @@ func migrateDB() error {
 	if err := InitializeExternalIdentityClaims(); err != nil {
 		return err
 	}
+	if err := ensureQuotaDataFlowColumns(); err != nil {
+		return err
+	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
@@ -431,6 +434,9 @@ func migrateDBFast() error {
 		return err
 	}
 	if err := InitializeExternalIdentityClaims(); err != nil {
+		return err
+	}
+	if err := ensureQuotaDataFlowColumns(); err != nil {
 		return err
 	}
 	if common.UsingMainDatabase(common.DatabaseTypeSQLite) {

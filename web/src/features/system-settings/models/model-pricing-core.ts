@@ -39,7 +39,7 @@ export type ModelPricingFormValues = z.infer<
   ReturnType<typeof createModelPricingSchema>
 >
 
-export type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+export type PricingMode = 'per-token' | 'per-request' | 'tiered_expr' | 'formula'
 
 export type LaneKey =
   | 'completion'
@@ -62,6 +62,7 @@ export type ModelRatioData = {
   billingMode?: PricingMode
   billingExpr?: string
   requestRuleExpr?: string
+  costExpr?: string
 }
 
 export type PreviewRow = {
@@ -215,8 +216,35 @@ export function buildPreviewRows(
   promptPrice: string,
   lanePrices: Record<LaneKey, string>,
   laneEnabled: Record<LaneKey, boolean>,
+  costExpr: string,
   t: (key: string) => string
 ): PreviewRow[] {
+  const costRow: PreviewRow = {
+    key: 'cost',
+    label: t('Cost expression'),
+    value: costExpr.trim() || t('Empty'),
+    multiline: true,
+  }
+
+  if (mode === 'formula') {
+    return [
+      { key: 'mode', label: 'BillingMode', value: 'formula' },
+      {
+        key: 'expr',
+        label: t('Formula'),
+        value: billingExpr.trim() || t('Empty'),
+        multiline: true,
+      },
+      {
+        key: 'groupNote',
+        label: t('Group ratio'),
+        value: t('Applied after this formula, same as token and request prices.'),
+        multiline: true,
+      },
+      costRow,
+    ]
+  }
+
   if (mode === 'tiered_expr') {
     const effectiveExpr = combineBillingExpr(billingExpr, requestRuleExpr)
     return [
@@ -227,6 +255,13 @@ export function buildPreviewRows(
         value: effectiveExpr || t('Empty'),
         multiline: true,
       },
+      {
+        key: 'groupNote',
+        label: t('Group ratio'),
+        value: t('Applied after this formula, same as token and request prices.'),
+        multiline: true,
+      },
+      costRow,
     ]
   }
 
@@ -237,6 +272,7 @@ export function buildPreviewRows(
         label: 'ModelPrice',
         value: values.price || t('Empty'),
       },
+      costRow,
     ]
   }
 
@@ -294,5 +330,6 @@ export function buildPreviewRows(
           ? `$${lanePrices.audioOutput}`
           : t('Empty'),
     },
+    costRow,
   ]
 }

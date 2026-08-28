@@ -174,6 +174,7 @@ import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
+import { isChannelApiDocsConfigured } from '../../lib/channel-api-docs'
 import type { Channel } from '../../types'
 import { useChannels } from '../channels-provider'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
@@ -188,6 +189,7 @@ import { ModelMappingEditor } from '../model-mapping-editor'
 import {
   ChannelAdvancedSection,
   ChannelApiAccessSection,
+  ChannelApiDocsSection,
   ChannelAuthSection,
   ChannelBasicSection,
   ChannelEditorLoadingState,
@@ -247,12 +249,14 @@ const CHANNEL_EDITOR_SECTION_IDS = {
   identity: 'channel-section-identity',
   credentials: 'channel-section-credentials',
   models: 'channel-section-models',
+  apiDocs: 'channel-section-api-docs',
   advanced: 'channel-section-advanced',
 } as const
 const CHANNEL_EDITOR_MAIN_SECTION_IDS = [
   CHANNEL_EDITOR_SECTION_IDS.identity,
   CHANNEL_EDITOR_SECTION_IDS.credentials,
   CHANNEL_EDITOR_SECTION_IDS.models,
+  CHANNEL_EDITOR_SECTION_IDS.apiDocs,
   CHANNEL_EDITOR_SECTION_IDS.advanced,
 ]
 const ADVANCED_SETTINGS_SECTION_IDS = {
@@ -728,6 +732,7 @@ export function ChannelMutateDrawer({
   const currentKey = form.watch('key')
   const currentOther = form.watch('other')
   const currentModels = form.watch('models')
+  const currentApiDocs = form.watch('api_docs')
   const currentName = form.watch('name')
   const currentModelMapping = form.watch('model_mapping')
   const awsKeyType = form.watch('aws_key_type')
@@ -1121,6 +1126,21 @@ export function ChannelMutateDrawer({
       statusLabel: getSectionStatusLabel(modelsStatus, t),
       status: modelsStatus,
       icon: <Boxes className='h-4 w-4' aria-hidden='true' />,
+    },
+    {
+      id: CHANNEL_EDITOR_SECTION_IDS.apiDocs,
+      title: t('API docs'),
+      description: isChannelApiDocsConfigured(currentApiDocs)
+        ? t('Configured')
+        : t('Optional'),
+      statusLabel: isChannelApiDocsConfigured(currentApiDocs)
+        ? t('Configured')
+        : t('Optional'),
+      status: isChannelApiDocsConfigured(currentApiDocs)
+        ? 'configured'
+        : 'idle',
+      icon: <FileText className='h-4 w-4' aria-hidden='true' />,
+      configured: isChannelApiDocsConfigured(currentApiDocs),
     },
     {
       id: CHANNEL_EDITOR_SECTION_IDS.advanced,
@@ -3614,6 +3634,13 @@ export function ChannelMutateDrawer({
                           </div>
                         </div>
                       </ChannelModelsSection>
+                    </div>
+
+                    <div
+                      id={CHANNEL_EDITOR_SECTION_IDS.apiDocs}
+                      className='scroll-mt-4'
+                    >
+                      <ChannelApiDocsSection form={form} />
                     </div>
 
                     <div

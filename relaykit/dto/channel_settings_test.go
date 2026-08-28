@@ -642,3 +642,39 @@ func TestChannelSettingsValidateHTTPTransport(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "http2_connection_shards")
 }
+
+func TestChannelApiDocsForModelOverridesDescriptionOnly(t *testing.T) {
+	docs := &ChannelApiDocs{
+		Published:   true,
+		TryIt:       true,
+		Category:    "image",
+		Method:      "POST",
+		Path:        "/v1/images/generations",
+		Description: "Shared fallback",
+		Models: map[string]*ChannelApiDocs{
+			"gpt-image-2": {
+				Description: "Standard image docs",
+			},
+			"gpt-image-2-hd": {
+				Description: "HD image extra fee",
+				Title:       "HD",
+			},
+		},
+	}
+
+	standard := docs.ForModel("gpt-image-2")
+	require.NotNil(t, standard)
+	assert.Equal(t, "Standard image docs", standard.Description)
+	assert.Equal(t, "/v1/images/generations", standard.Path)
+	assert.True(t, standard.Published)
+	assert.Nil(t, standard.Models)
+
+	hd := docs.ForModel("gpt-image-2-hd")
+	require.NotNil(t, hd)
+	assert.Equal(t, "HD image extra fee", hd.Description)
+	assert.Equal(t, "HD", hd.Title)
+
+	fallback := docs.ForModel("missing")
+	require.NotNil(t, fallback)
+	assert.Equal(t, "Shared fallback", fallback.Description)
+}

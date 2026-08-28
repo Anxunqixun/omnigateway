@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel"
 	taskcommon "github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -81,7 +82,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err == nil && storage != nil {
 		data, bErr := storage.Bytes()
 		if bErr == nil && len(data) > 0 {
-			return bytes.NewReader(data), nil
+			return bytes.NewReader(helper.StripBillingOnlyJSON(data)), nil
 		}
 	}
 	v, exists := c.Get("task_request")
@@ -92,7 +93,7 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	if err != nil {
 		return nil, err
 	}
-	return bytes.NewReader(data), nil
+	return bytes.NewReader(helper.StripBillingOnlyJSON(data)), nil
 }
 
 func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (*http.Response, error) {

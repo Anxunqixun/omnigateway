@@ -18,23 +18,18 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
-import type { DocsCatalog, DocsPage } from './types'
+import type { DocsCatalogResponse, DocsEndpoint } from './types'
 
-export async function getDocsCatalog(): Promise<DocsCatalog> {
+export async function getDocsCatalog(): Promise<DocsCatalogResponse> {
   const res = await api.get('/api/docs/')
   return res.data
 }
 
 export async function getDocsPage(slug: string): Promise<{
   success: boolean
-  data?: DocsPage
+  data?: DocsEndpoint
   message?: string
 }> {
   const res = await api.get(`/api/docs/${encodeURIComponent(slug)}`)
-  return res.data
-}
-
-export async function getDocsTemplate(kind: string, model: string) {
-  const res = await api.get('/api/docs/templates', { params: { kind, model } })
   return res.data
 }

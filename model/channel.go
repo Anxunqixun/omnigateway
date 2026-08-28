@@ -375,6 +375,30 @@ func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool, sortOpti
 	return channels, err
 }
 
+func ListEnabledChannelsForDocs() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Select("id", "models", "status", "settings", "priority", "weight").
+		Where("status = ?", common.ChannelStatusEnabled).
+		Find(&channels).Error
+	return channels, err
+}
+
+func ListChannelsForAdminDocs() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Select("id", "name", "models", "status", "settings").
+		Order("id asc").
+		Find(&channels).Error
+	return channels, err
+}
+
+func UpdateChannelOtherSettings(id int, settings dto.ChannelOtherSettings) error {
+	raw, err := common.Marshal(settings)
+	if err != nil {
+		return err
+	}
+	return DB.Model(&Channel{}).Where("id = ?", id).Update("settings", string(raw)).Error
+}
+
 func GetChannelsByTag(tag string, idSort bool, selectAll bool, sortOptions ...ChannelSortOptions) ([]*Channel, error) {
 	var channels []*Channel
 	order := resolveChannelSortOptions(idSort, sortOptions)

@@ -37,6 +37,7 @@ type Pricing struct {
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	PriceHint              string                  `json:"price_hint,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
+	UserModelRatio         float64                 `json:"user_model_ratio"`
 }
 
 type PricingVendor struct {
@@ -401,7 +402,7 @@ func updatePricing() {
 			audioCompletionRatio := ratio_setting.GetAudioCompletionRatio(model)
 			pricing.AudioCompletionRatio = &audioCompletionRatio
 		}
-		if billingMode := billing_setting.GetBillingMode(model); billingMode == "tiered_expr" {
+		if billingMode := billing_setting.GetBillingMode(model); billing_setting.UsesExprSell(billingMode) {
 			if expr, ok := billing_setting.GetBillingExpr(model); ok && strings.TrimSpace(expr) != "" {
 				pricing.BillingMode = billingMode
 				pricing.BillingExpr = expr

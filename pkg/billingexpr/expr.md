@@ -77,6 +77,7 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 |----------|-----------|---------|
 | `tier` | `tier(name, value) → float64` | Records which pricing tier matched; must wrap the cost expression |
 | `param` | `param(path) → any` | Reads a JSON path from the request body (uses gjson) |
+| `count` | `count(path) → float64` | Counts a request JSON list (or a numeric field such as `n`). Missing paths are 0. Values above 256 are clamped. |
 | `header` | `header(key) → string` | Reads a request header value |
 | `has` | `has(source, substr) → bool` | Substring check |
 | `hour` | `hour(tz) → int` | Current hour in timezone (0-23) |
@@ -106,6 +107,12 @@ tier("base", p * 2 + c * 8 + img * 2.5)
 
 # Multimodal with audio
 tier("base", p * 0.43 + c * 3.06 + img * 0.78 + ai * 3.81 + ao * 15.11)
+
+# Site formula (v2): first 5 images at $0.04, each extra image $0.01
+v2:0.04 + max(count("images")-5, 0)*0.01
+
+# Same rule when the client sends n instead of an images array
+v2:0.04 + max(count("n")-5, 0)*0.01
 ```
 
 ### Request Rules (appended after `|||`)

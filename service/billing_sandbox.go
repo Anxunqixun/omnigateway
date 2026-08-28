@@ -65,32 +65,31 @@ func EvaluateBillingSandbox(req BillingSandboxRequest) BillingSandboxResult {
 	if expr == "" {
 		out.PreconsumeError = "missing sell expression"
 		out.SettleError = "missing sell expression"
-		return out
-	}
-
-	preSnap := sandboxSnapshot(req.Model, expr, groupRatio, quotaPerUnit)
-	if pre, err := billingexpr.ComputeTieredQuotaWithRequest(preSnap, billingexpr.TokenParams{}, preInput); err != nil {
-		out.PreconsumeError = err.Error()
 	} else {
-		out.PreconsumeQuota = pre.ActualQuotaAfterGroup
-		out.RawPreconsume = pre.ActualQuotaBeforeGroup
-		out.MatchedTier = pre.MatchedTier
-	}
+		preSnap := sandboxSnapshot(req.Model, expr, groupRatio, quotaPerUnit)
+		if pre, err := billingexpr.ComputeTieredQuotaWithRequest(preSnap, billingexpr.TokenParams{}, preInput); err != nil {
+			out.PreconsumeError = err.Error()
+		} else {
+			out.PreconsumeQuota = pre.ActualQuotaAfterGroup
+			out.RawPreconsume = pre.ActualQuotaBeforeGroup
+			out.MatchedTier = pre.MatchedTier
+		}
 
-	settleSnap := sandboxSnapshot(req.Model, expr, groupRatio, quotaPerUnit)
-	if settled, err := billingexpr.ComputeTieredQuotaWithRequest(settleSnap, req.Usage, settleInput); err != nil {
-		out.SettleError = err.Error()
-		if out.PreconsumeQuota > 0 {
-			out.SettleQuota = out.PreconsumeQuota
+		settleSnap := sandboxSnapshot(req.Model, expr, groupRatio, quotaPerUnit)
+		if settled, err := billingexpr.ComputeTieredQuotaWithRequest(settleSnap, req.Usage, settleInput); err != nil {
+			out.SettleError = err.Error()
+			if out.PreconsumeQuota > 0 {
+				out.SettleQuota = out.PreconsumeQuota
+			}
+		} else {
+			out.SettleQuota = settled.ActualQuotaAfterGroup
+			out.RawSettle = settled.ActualQuotaBeforeGroup
+			if settled.MatchedTier != "" {
+				out.MatchedTier = settled.MatchedTier
+			}
 		}
-	} else {
-		out.SettleQuota = settled.ActualQuotaAfterGroup
-		out.RawSettle = settled.ActualQuotaBeforeGroup
-		if settled.MatchedTier != "" {
-			out.MatchedTier = settled.MatchedTier
-		}
+		out.DeltaQuota = out.SettleQuota - out.PreconsumeQuota
 	}
-	out.DeltaQuota = out.SettleQuota - out.PreconsumeQuota
 
 	if costExpr == "" {
 		out.CostUnknown = true

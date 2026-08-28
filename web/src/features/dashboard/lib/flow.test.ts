@@ -773,4 +773,27 @@ describe('dashboard flow data', () => {
     expect(linkOpacity(dimmedLink)).toBe(0.08)
     expect(highlightedLink.zIndex > dimmedLink.zIndex).toBe(true)
   })
+
+  test('treats non-finite user metrics as empty instead of crashing the chart', () => {
+    const result = buildDashboardFlowData(
+      [
+        {
+          token_id: 11,
+          token_name: 'primary',
+          use_group: 'vip',
+          model_name: 'gpt-4.1',
+          quota: Number.NaN,
+          token_used: Number.POSITIVE_INFINITY,
+          count: Number.NEGATIVE_INFINITY,
+        },
+      ],
+      'quota',
+      { role: 'user' }
+    )
+
+    expect(result.summary.quota).toBe(0)
+    expect(result.flow.links.every((link) => Number.isFinite(link.value))).toBe(
+      true
+    )
+  })
 })

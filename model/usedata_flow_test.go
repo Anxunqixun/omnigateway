@@ -132,6 +132,14 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, 175, selfRows[0].Quota)
 }
 
+func TestFillFlowTokenNamesLeavesRowsWhenLookupFails(t *testing.T) {
+	truncateTables(t)
+	rows := []*FlowQuotaData{{TokenID: 99, UseGroup: "vip", ModelName: "gpt-a", Quota: 10}}
+	require.NoError(t, fillFlowTokenNames(rows))
+	require.Empty(t, rows[0].TokenName)
+	require.Equal(t, 99, rows[0].TokenID)
+}
+
 func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	truncateTables(t)
 	CacheQuotaDataLock.Lock()

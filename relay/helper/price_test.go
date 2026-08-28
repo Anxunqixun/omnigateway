@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -271,4 +272,157 @@ func TestModelPriceHelperRequestBillingRatiosOnlyApplyToFixedPrice(t *testing.T)
 	require.Equal(t, "QuotaFromFloat", clamp.Op)
 	require.Equal(t, common.QuotaClampOverflow, clamp.Kind)
 	require.Nil(t, info.Billing)
+}
+
+func TestModelPriceHelperTieredAppliesGroupRatioAfterExpression(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode":    `{"expr-group-model":"tiered_expr"}`,
+		"billing_setting.billing_expr":    `{"expr-group-model":"v2:0.01"}`,
+		"group_ratio_setting.group_ratio": `{"default":1,"vip":2}`,
+	}))
+
+	newInfo := func(group string) (*gin.Context, *relaycommon.RelayInfo) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Content-Type", "application/json")
+		ctx.Request = req
+		ctx.Set("group", group)
+		return ctx, &relaycommon.RelayInfo{
+			OriginModelName: "expr-group-model",
+			UserGroup:       group,
+			UsingGroup:      group,
+			RequestHeaders:  map[string]string{"Content-Type": "application/json"},
+			BillingRequestInput: &billingexpr.RequestInput{
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    []byte(`{}`),
+			},
+		}
+	}
+
+	baseCtx, baseInfo := newInfo("default")
+	basePrice, err := ModelPriceHelper(baseCtx, baseInfo, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.Equal(t, 5000, basePrice.QuotaToPreConsume)
+	require.InDelta(t, 1, basePrice.GroupRatioInfo.GroupRatio, 1e-9)
+
+	vipCtx, vipInfo := newInfo("vip")
+	vipPrice, err := ModelPriceHelper(vipCtx, vipInfo, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.Equal(t, 10000, vipPrice.QuotaToPreConsume)
+	require.InDelta(t, 2, vipPrice.GroupRatioInfo.GroupRatio, 1e-9)
+	require.Equal(t, basePrice.QuotaToPreConsume*2, vipPrice.QuotaToPreConsume)
+}
+
+func TestModelPriceHelperFormulaUsesSiteExprAndLeavesUserRatioAtOneWithoutUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode": `{"formula-test-model":"formula"}`,
+		"billing_setting.billing_expr": `{"formula-test-model":"v2:0.01"}`,
+		"group_ratio_setting.group_ratio": `{"default":1}`,
+	}))
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Content-Type", "application/json")
+	ctx.Request = req
+	ctx.Set("group", "default")
+
+	info := &relaycommon.RelayInfo{
+		UserId:          0,
+		OriginModelName: "formula-test-model",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+		RequestHeaders:  map[string]string{"Content-Type": "application/json"},
+		BillingRequestInput: &billingexpr.RequestInput{
+			Headers: map[string]string{"Content-Type": "application/json"},
+			Body:    []byte(`{}`),
+		},
+	}
+
+	priceData, err := ModelPriceHelper(ctx, info, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.False(t, priceData.HasUserModelRatio)
+	require.InDelta(t, 1, priceData.EffectiveUserModelRatio(), 1e-9)
+	require.NotNil(t, info.TieredBillingSnapshot)
+	require.Equal(t, billing_setting.BillingModeFormula, info.TieredBillingSnapshot.BillingMode)
+	require.Equal(t, 5000, priceData.QuotaToPreConsume)
+}
+
+func TestModelPriceHelperPerCallUsesFormulaAndGroupRatio(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	saved := map[string]string{}
+	require.NoError(t, config.GlobalConfig.SaveToDB(func(key, value string) error {
+		saved[key] = value
+		return nil
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, config.GlobalConfig.LoadFromDB(saved))
+	})
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"billing_setting.billing_mode":    `{"task-formula-model":"formula"}`,
+		"billing_setting.billing_expr":    `{"task-formula-model":"v2:0.01"}`,
+		"group_ratio_setting.group_ratio": `{"default":1,"vip":2}`,
+	}))
+
+	newInfo := func(group string) (*gin.Context, *relaycommon.RelayInfo) {
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		req := httptest.NewRequest(http.MethodPost, "/v1/videos", bytes.NewBufferString(`{"model":"task-formula-model"}`))
+		req.Header.Set("Content-Type", "application/json")
+		ctx.Request = req
+		ctx.Set("group", group)
+		return ctx, &relaycommon.RelayInfo{
+			OriginModelName: "task-formula-model",
+			UserGroup:       group,
+			UsingGroup:      group,
+			RequestHeaders:  map[string]string{"Content-Type": "application/json"},
+		}
+	}
+
+	baseCtx, baseInfo := newInfo("default")
+	basePrice, err := ModelPriceHelperPerCall(baseCtx, baseInfo)
+	require.NoError(t, err)
+	require.False(t, basePrice.UsePrice)
+	require.Equal(t, 5000, basePrice.Quota)
+	require.NotNil(t, baseInfo.TieredBillingSnapshot)
+
+	vipCtx, vipInfo := newInfo("vip")
+	vipPrice, err := ModelPriceHelperPerCall(vipCtx, vipInfo)
+	require.NoError(t, err)
+	require.Equal(t, 10000, vipPrice.Quota)
+	require.Equal(t, basePrice.Quota*2, vipPrice.Quota)
+}
+
+func TestModelPriceHelperAppliesUserModelRatioOnTokenPreConsume(t *testing.T) {
+	info := &relaycommon.RelayInfo{}
+	info.PriceData.GroupRatioInfo.GroupRatio = 2
+	info.PriceData.UserModelRatio = 0.5
+	info.PriceData.HasUserModelRatio = true
+	require.InDelta(t, 1, info.PriceData.SellRatio(), 1e-9)
+
+	info.PriceData.UserModelRatio = 0
+	require.InDelta(t, 0, info.PriceData.SellRatio(), 1e-9)
 }

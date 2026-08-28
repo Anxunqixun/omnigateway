@@ -33,7 +33,8 @@ func TestResolveIncomingBillingExprRequestInput(t *testing.T) {
 
 	input, err := ResolveIncomingBillingExprRequestInput(ctx, info)
 	require.NoError(t, err)
-	require.Equal(t, body, input.Body)
+	require.Equal(t, "fast", gjson.GetBytes(input.Body, "service_tier").String())
+	require.Equal(t, float64(0), gjson.GetBytes(input.Body, "input_seconds").Float())
 	require.Equal(t, "application/json", input.Headers["Content-Type"])
 }
 

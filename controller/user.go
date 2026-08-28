@@ -601,6 +601,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"enabled":    true,
 			"channel":    true,
 			"models":     true,
+			"api_docs":   true,
 			"redemption": true,
 			"user":       true,
 			"setting":    false, // 管理员不能访问系统设置
@@ -611,6 +612,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 			"enabled":    true,
 			"channel":    true,
 			"models":     true,
+			"api_docs":   true,
 			"redemption": true,
 			"user":       true,
 			"setting":    true,
@@ -699,6 +701,12 @@ func UpdateUser(c *gin.Context) {
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
 	}
+	normalizedModelRatio, err := model.NormalizeUserModelRatioJSON(updatedUser.ModelRatio)
+	if err != nil {
+		common.ApiErrorMsg(c, "invalid model_ratio")
+		return
+	}
+	updatedUser.ModelRatio = normalizedModelRatio
 	updatePassword := updatedUser.Password != ""
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {
@@ -1020,12 +1028,18 @@ func CreateUser(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
+	normalizedModelRatio, err := model.NormalizeUserModelRatioJSON(user.ModelRatio)
+	if err != nil {
+		common.ApiErrorMsg(c, "invalid model_ratio")
+		return
+	}
 	// Even for admin users, we cannot fully trust them!
 	cleanUser := model.User{
 		Username:    user.Username,
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
 		Role:        user.Role, // 保持管理员设置的角色
+		ModelRatio:  normalizedModelRatio,
 	}
 	authzTouched := false
 	if err := model.DB.Transaction(func(tx *gorm.DB) error {

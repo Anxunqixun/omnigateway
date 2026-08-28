@@ -87,6 +87,95 @@ type ChannelOtherSettings struct {
 	AdvancedCustom                        *AdvancedCustomConfig `json:"advanced_custom,omitempty"`
 	TaskGeneric                           *TaskGenericConfig    `json:"task_generic,omitempty"`
 	CostRatio                             *float64              `json:"cost_ratio,omitempty"`
+	ApiDocs                               *ChannelApiDocs       `json:"api_docs,omitempty"`
+}
+
+// ChannelApiDocs is the admin-authored public API reference for a channel.
+// Customers see the models this channel exposes, not the channel name.
+type ChannelApiDocs struct {
+	Published         bool                   `json:"published,omitempty"`
+	TryIt             bool                   `json:"try_it,omitempty"`
+	Category          string                 `json:"category,omitempty"`
+	Method            string                 `json:"method,omitempty"`
+	Path              string                 `json:"path,omitempty"`
+	Title             string                 `json:"title,omitempty"`
+	Description       string                 `json:"description,omitempty"`
+	Capabilities      []ChannelApiDocTag     `json:"capabilities,omitempty"`
+	RequiredParams    []ChannelApiDocParam   `json:"required_params,omitempty"`
+	OptionalParams    []ChannelApiDocParam   `json:"optional_params,omitempty"`
+	RequestExample    string                 `json:"request_example,omitempty"`
+	ResponseExample   string                 `json:"response_example,omitempty"`
+	RelatedEndpoints  []ChannelApiDocRelated `json:"related_endpoints,omitempty"`
+	Models            map[string]*ChannelApiDocs `json:"models,omitempty"`
+}
+
+func (d *ChannelApiDocs) ForModel(modelName string) *ChannelApiDocs {
+	if d == nil {
+		return nil
+	}
+	resolved := *d
+	resolved.Models = nil
+	override := d.Models[strings.TrimSpace(modelName)]
+	if override == nil {
+		return &resolved
+	}
+	if override.Category != "" {
+		resolved.Category = override.Category
+	}
+	if override.Method != "" {
+		resolved.Method = override.Method
+	}
+	if override.Path != "" {
+		resolved.Path = override.Path
+	}
+	if override.Title != "" {
+		resolved.Title = override.Title
+	}
+	if override.Description != "" {
+		resolved.Description = override.Description
+	}
+	if len(override.Capabilities) > 0 {
+		resolved.Capabilities = override.Capabilities
+	}
+	if len(override.RequiredParams) > 0 {
+		resolved.RequiredParams = override.RequiredParams
+	}
+	if len(override.OptionalParams) > 0 {
+		resolved.OptionalParams = override.OptionalParams
+	}
+	if override.RequestExample != "" {
+		resolved.RequestExample = override.RequestExample
+	}
+	if override.ResponseExample != "" {
+		resolved.ResponseExample = override.ResponseExample
+	}
+	if len(override.RelatedEndpoints) > 0 {
+		resolved.RelatedEndpoints = override.RelatedEndpoints
+	}
+	return &resolved
+}
+
+type ChannelApiDocTag struct {
+	Label string `json:"label,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+type ChannelApiDocParam struct {
+	Name        string `json:"name,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Default     string `json:"default,omitempty"`
+	Range       string `json:"range,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type ChannelApiDocRelated struct {
+	Method          string `json:"method,omitempty"`
+	Path            string `json:"path,omitempty"`
+	Title           string `json:"title,omitempty"`
+	Description     string `json:"description,omitempty"`
+	RequestExample  string `json:"request_example,omitempty"`
+	ResponseExample string `json:"response_example,omitempty"`
+	TryIt           bool   `json:"try_it,omitempty"`
 }
 
 // TaskGenericConfig drives the configurable REST JSON async task adaptor.

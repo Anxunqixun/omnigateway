@@ -17,7 +17,7 @@ import (
 // and the polling response body. Returns true when the model uses expressions.
 func TrySettleTaskExprBilling(ctx context.Context, task *model.Task, taskResult *relaycommon.TaskInfo, rawBody []byte) bool {
 	bc := task.PrivateData.BillingContext
-	if bc == nil || bc.BillingMode != billing_setting.BillingModeTieredExpr || strings.TrimSpace(bc.ExprString) == "" {
+	if bc == nil || !billing_setting.UsesExprSell(bc.BillingMode) || strings.TrimSpace(bc.ExprString) == "" {
 		return false
 	}
 
@@ -26,6 +26,13 @@ func TrySettleTaskExprBilling(ctx context.Context, task *model.Task, taskResult 
 		ResponseBody: rawBody,
 		UsageAliases: billing_setting.GetUsageAlias(bc.OriginModelName),
 	}
+	exprVersion := bc.ExprVersion
+	if exprVersion == 0 {
+		// Frozen tasks may omit expr_version (omitempty). Parse the
+		// prefix so v2 USD output is not converted as v1 $/1M tokens,
+		// which rounds the settlement quota to 0 and skips the refund.
+		exprVersion = billingexpr.ExprVersion(bc.ExprString)
+	}
 	snap := &billingexpr.BillingSnapshot{
 		BillingMode:  bc.BillingMode,
 		ModelName:    bc.OriginModelName,
@@ -33,7 +40,7 @@ func TrySettleTaskExprBilling(ctx context.Context, task *model.Task, taskResult 
 		ExprHash:     billingexpr.ExprHashString(bc.ExprString),
 		GroupRatio:   bc.GroupRatio,
 		QuotaPerUnit: bc.QuotaPerUnit,
-		ExprVersion:  bc.ExprVersion,
+		ExprVersion:  exprVersion,
 	}
 	if snap.QuotaPerUnit == 0 {
 		snap.QuotaPerUnit = common.QuotaPerUnit
@@ -53,10 +60,14 @@ func TrySettleTaskExprBilling(ctx context.Context, task *model.Task, taskResult 
 	tr, err := billingexpr.ComputeTieredQuotaWithRequest(snap, params, input)
 	if err != nil {
 		logger.LogError(ctx, fmt.Sprintf("task %s expr settle failed: %v", task.TaskID, err))
+		writeTaskCostLedger(ctx, task, task.Quota)
 		return true
 	}
+	applyUserModelRatioToTieredResult(&tr, snap, bc.EffectiveUserModelRatio())
 	if tr.ActualQuotaAfterGroup > 0 {
 		RecalculateTaskQuota(ctx, task, tr.ActualQuotaAfterGroup, "expr计费调整")
+		return true
 	}
+	writeTaskCostLedger(ctx, task, task.Quota)
 	return true
 }

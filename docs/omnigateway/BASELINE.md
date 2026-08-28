@@ -2,6 +2,8 @@
 
 This tree is a fork of [QuantumNous/new-api](https://github.com/QuantumNous/new-api) locked to **v1.0.0-rc.26**.
 
+Secondary-development notes, Docker/GHCR, and what must not be committed: [`README.md`](./README.md).
+
 Do not track `calciumion/new-api:latest` in production.
 
 ## License

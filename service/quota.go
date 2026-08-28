@@ -119,6 +119,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	if ok {
 		actualGroupRatio = userGroupRatio
 	}
+	actualGroupRatio *= relayInfo.PriceData.EffectiveUserModelRatio()
 
 	quotaInfo := QuotaInfo{
 		InputDetails: TokenDetails{
@@ -197,7 +198,7 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 		ModelName:  modelName,
 		UsePrice:   usePrice,
 		ModelRatio: modelRatio,
-		GroupRatio: groupRatio,
+		GroupRatio: relayInfo.PriceData.SellRatio(),
 	}
 
 	quota, clamp := calculateAudioQuota(quotaInfo)
@@ -329,7 +330,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 		ModelName:  relayInfo.OriginModelName,
 		UsePrice:   usePrice,
 		ModelRatio: modelRatio,
-		GroupRatio: groupRatio,
+		GroupRatio: relayInfo.PriceData.SellRatio(),
 	}
 
 	quota, clamp := calculateAudioQuota(quotaInfo)

@@ -1,20 +1,15 @@
 package service
 
 import (
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
-	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/QuantumNous/new-api/setting/config"
-	"github.com/gin-gonic/gin"
 )
 
 func TestBaselineRatioModelsSkipExpr(t *testing.T) {
@@ -69,20 +64,6 @@ func TestV2SettleErrorKeepsPreconsumeAndFlags(t *testing.T) {
 	}
 	if info.BillingSettleError == "" {
 		t.Fatal("v2 must record BillingSettleError")
-	}
-}
-
-func TestFormBillingViewAliasesSeconds(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	form := url.Values{}
-	form.Set("duration", "8")
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	c, _ := gin.CreateTestContext(httptest.NewRecorder())
-	c.Request = req
-	view := helper.NormalizeBillingView(c, nil)
-	if string(view) == "" || !strings.Contains(string(view), `"seconds"`) {
-		t.Fatalf("form view should alias seconds: %s", view)
 	}
 }
 

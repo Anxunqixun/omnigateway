@@ -138,6 +138,25 @@ func increaseQuotaData(quotaData *QuotaData) {
 	}
 }
 
+func ensureQuotaDataFlowColumns() error {
+	if DB == nil || !DB.Migrator().HasTable(&QuotaData{}) {
+		return nil
+	}
+	for _, field := range []string{"UseGroup", "TokenID", "ChannelID", "NodeName"} {
+		if DB.Migrator().HasColumn(&QuotaData{}, field) {
+			continue
+		}
+		if err := DB.Migrator().AddColumn(&QuotaData{}, field); err != nil {
+			common.SysLog(fmt.Sprintf("failed to add quota_data.%s: %v", field, err))
+		}
+	}
+	return nil
+}
+
+func quotaDataHasColumn(field string) bool {
+	return DB != nil && DB.Migrator().HasColumn(&QuotaData{}, field)
+}
+
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
 	// 从quota_data表中查询数据

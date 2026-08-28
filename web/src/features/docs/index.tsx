@@ -17,112 +17,96 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { BookOpen } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
 import { PageTransition } from '@/components/page-transition'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SearchBar } from '@/features/pricing/components/search-bar'
+import { cn } from '@/lib/utils'
 
 import { getDocsCatalog } from './api'
-import type { DocsCatalogItem } from './types'
+import { DocsArticle } from './components/docs-article'
+import { DocsNav } from './components/docs-nav'
+import { DocsTryIt } from './components/docs-try-it'
+import { findDocsEndpoint, renderDocsText } from './lib/group-docs'
 
-const CATEGORY_KEYS: Record<string, string> = {
-  'getting-started': 'Getting Started',
-  api: 'API Reference',
-  billing: 'Billing',
-  models: 'Models',
+type DocsReferenceProps = {
+  selectedId?: string
 }
 
 export function Docs({ selectedSlug }: { selectedSlug?: string }) {
+  return <DocsReference selectedId={selectedSlug} />
+}
+
+export function DocsReference(props: DocsReferenceProps) {
   const { t } = useTranslation()
-  const [search, setSearch] = useState('')
   const { data, isLoading } = useQuery({
     queryKey: ['docs-catalog'],
     queryFn: getDocsCatalog,
   })
-  const items = data?.data?.items ?? []
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return items
-    return items.filter(
-      (item) =>
-        item.title.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q)
+  const baseUrl =
+    data?.data?.base_url ||
+    (typeof window !== 'undefined' ? window.location.origin : '')
+  const items = (data?.data?.items ?? []).map((item) => ({
+    ...item,
+    request_example: renderDocsText(
+      item.request_example || '',
+      item.model,
+      baseUrl
+    ),
+    response_example: renderDocsText(
+      item.response_example || '',
+      item.model,
+      baseUrl
+    ),
+  }))
+  const endpoint = findDocsEndpoint(items, props.selectedId)
+
+  let article: ReactNode
+  if (isLoading) {
+    article = (
+      <div className='space-y-3'>
+        <Skeleton className='h-8 w-48' />
+        <Skeleton className='h-64 w-full' />
+      </div>
     )
-  }, [items, search])
-  const grouped = useMemo(() => {
-    const map = new Map<string, DocsCatalogItem[]>()
-    for (const item of filtered) {
-      const list = map.get(item.category) ?? []
-      list.push(item)
-      map.set(item.category, list)
-    }
-    return map
-  }, [filtered])
+  } else if (!endpoint) {
+    article = <p className='text-muted-foreground'>{t('No docs found')}</p>
+  } else {
+    article = <DocsArticle endpoint={endpoint} baseUrl={baseUrl} />
+  }
 
   return (
-    <PublicLayout>
+    <PublicLayout showMainContainer={false}>
       <PageTransition>
-        <div className='mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-6'>
-          <div className='space-y-2'>
-            <h1 className='text-2xl font-semibold'>{t('Docs')}</h1>
-            <p className='text-muted-foreground text-sm'>
-              {t('API keys, endpoints, billing, and published model guides.')}
-            </p>
-          </div>
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            onClear={() => setSearch('')}
-            placeholder={t('Search docs...')}
-          />
-          {isLoading ? (
-            <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-              {['a', 'b', 'c'].map((key) => (
-                <Skeleton key={key} className='h-28 rounded-lg' />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <p className='text-muted-foreground text-sm'>{t('No docs found')}</p>
-          ) : (
-            <div className='space-y-8'>
-              {[...grouped.entries()].map(([category, pages]) => (
-                <section key={category} className='space-y-3'>
-                  <h2 className='text-lg font-semibold'>
-                    {t(CATEGORY_KEYS[category] || category)}
-                  </h2>
-                  <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-                    {pages.map((page) => (
-                      <Link
-                        key={page.id}
-                        to='/docs/$slug'
-                        params={{ slug: page.id }}
-                        className={
-                          selectedSlug === page.id
-                            ? 'bg-secondary flex h-auto items-start gap-3 rounded-lg border p-4 text-left'
-                            : 'hover:bg-muted/40 flex h-auto items-start gap-3 rounded-lg border p-4 text-left'
-                        }
-                      >
-                        <BookOpen className='mt-0.5 size-4 shrink-0' />
-                        <span className='min-w-0'>
-                          <span className='block truncate font-medium'>
-                            {page.title}
-                          </span>
-                          <span className='text-muted-foreground block truncate text-xs'>
-                            {page.kind === 'model'
-                              ? t('Model guide')
-                              : t('Handbook')}
-                          </span>
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              ))}
+        <div
+          className={cn(
+            'mx-auto grid min-h-[calc(100svh-5rem)] w-full max-w-[1440px] gap-0 pt-20',
+            endpoint?.kind === 'article'
+              ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+              : 'lg:grid-cols-[260px_minmax(0,1fr)_340px]'
+          )}
+        >
+          <aside className='border-border/60 overflow-y-auto border-b p-4 lg:sticky lg:top-20 lg:h-[calc(100svh-5rem)] lg:border-r lg:border-b-0'>
+            {isLoading ? (
+              <div className='space-y-2'>
+                <Skeleton className='h-6 w-32' />
+                <Skeleton className='h-8 w-full' />
+                <Skeleton className='h-8 w-full' />
+              </div>
+            ) : (
+              <DocsNav items={items} selectedId={endpoint?.id} />
+            )}
+          </aside>
+          <main className='min-w-0 overflow-y-auto p-4 sm:p-6'>
+            {article}
+          </main>
+          {endpoint?.kind === 'article' ? null : (
+            <div className='border-border/60 overflow-y-auto border-t p-4 lg:sticky lg:top-20 lg:h-[calc(100svh-5rem)] lg:border-t-0 lg:border-l'>
+              {endpoint ? (
+                <DocsTryIt endpoint={endpoint} baseUrl={baseUrl} />
+              ) : null}
             </div>
           )}
         </div>

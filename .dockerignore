@@ -10,3 +10,10 @@ docs
 /web/node_modules
 /web/dist
 !THIRD-PARTY-LICENSES.md
+.local-tests
+.env
+.env.*
+/data
+/logs
+*.pem
+*.key

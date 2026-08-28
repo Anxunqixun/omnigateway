@@ -34,6 +34,7 @@ import { applyFaviconToDom } from '@/lib/dom-utils'
 import '@/lib/dayjs'
 import { initializeFrontendCache } from '@/lib/frontend-cache'
 import { handleServerError } from '@/lib/handle-server-error'
+import { shouldNavigateToServerErrorPage } from '@/lib/query-error'
 
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
@@ -86,7 +87,14 @@ const queryClient = new QueryClient({
       if (error instanceof AxiosError) {
         if (error.response?.status === 500) {
           toast.error(i18next.t('Internal Server Error!'))
-          router.navigate({ to: '/500' })
+          if (
+            shouldNavigateToServerErrorPage(
+              error.config?.url,
+              error.response.status
+            )
+          ) {
+            router.navigate({ to: '/500' })
+          }
         }
       }
     },

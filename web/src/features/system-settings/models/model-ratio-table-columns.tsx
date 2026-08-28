@@ -92,6 +92,14 @@ export function buildModelRatioColumns({
               className='shrink-0'
             />
           )}
+          {row.original.billingMode === 'formula' && (
+            <StatusBadge
+              label={t('Formula')}
+              variant='info'
+              copyable={false}
+              className='shrink-0'
+            />
+          )}
           {row.original.hasConflict && (
             <StatusBadge
               label={t('Conflict')}

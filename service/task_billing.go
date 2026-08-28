@@ -46,6 +46,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		other["model_ratio"] = info.PriceData.ModelRatio
 	}
 	other["group_ratio"] = info.PriceData.GroupRatioInfo.GroupRatio
+	attachUserModelRatio(other, info.PriceData)
 	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
 	}
@@ -129,6 +130,9 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
+		if bc.HasUserModelRatio {
+			other["user_model_ratio"] = bc.UserModelRatio
+		}
 		if priceData := taskBillingContextPriceData(bc); priceData != nil {
 			for k, v := range priceData.OtherRatios() {
 				other[k] = v
@@ -223,6 +227,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	if quotaDelta == 0 {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 预扣费准确（%s，%s）",
 			task.TaskID, logger.LogQuota(actualQuota), reason))
+		writeTaskCostLedger(ctx, task, actualQuota)
 		return
 	}
 
@@ -274,7 +279,7 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		taskInput.ResponseBody = bc.LastResponseBody
 		taskInput.UsageAliases = billing_setting.GetUsageAlias(taskModelName(task))
 	}
-	costQuota := attachTaskDualLedger(other, taskModelName(task), actualQuota, taskInput, tokenParamsFromCounts(0, 0))
+	costQuota := attachTaskDualLedger(other, task, actualQuota, taskInput, tokenParamsFromCounts(0, 0))
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
 		UserId:    task.UserId,
 		LogType:   logType,
@@ -336,8 +341,55 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 	}
 
 	// 计算实际应扣费额度: totalTokens * modelRatio * groupRatio * otherMultiplier（饱和转换，防止溢出成负数）
-	actualQuota, clamp := common.QuotaFromFloatChecked(float64(totalTokens) * modelRatio * finalGroupRatio * otherMultiplier)
+	userModelRatio := 1.0
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		userModelRatio = bc.EffectiveUserModelRatio()
+	}
+	actualQuota, clamp := common.QuotaFromFloatChecked(float64(totalTokens) * modelRatio * finalGroupRatio * userModelRatio * otherMultiplier)
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason, clamp)
+}
+
+func persistTaskPollBody(task *model.Task, rawBody []byte) {
+	if task == nil || len(rawBody) == 0 {
+		return
+	}
+	if task.PrivateData.BillingContext == nil {
+		task.PrivateData.BillingContext = &model.TaskBillingContext{}
+	}
+	task.PrivateData.BillingContext.LastResponseBody = append([]byte(nil), rawBody...)
+}
+
+func writeTaskCostLedger(ctx context.Context, task *model.Task, sellQuota int) {
+	if task == nil || resolveTaskCostExpr(task) == "" {
+		return
+	}
+	other := taskBillingOther(task)
+	other["task_id"] = task.TaskID
+	other["actual_quota"] = sellQuota
+	taskInput := billingexpr.RequestInput{}
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		taskInput.Body = bc.RequestBody
+		taskInput.ResponseBody = bc.LastResponseBody
+		taskInput.UsageAliases = billing_setting.GetUsageAlias(taskModelName(task))
+	}
+	costQuota := attachTaskDualLedger(other, task, sellQuota, taskInput, tokenParamsFromCounts(0, 0))
+	if costQuota == nil {
+		return
+	}
+	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
+		UserId:    task.UserId,
+		LogType:   model.LogTypeConsume,
+		Content:   "任务完成：成本入账",
+		ChannelId: task.ChannelId,
+		ModelName: taskModelName(task),
+		Quota:     0,
+		CostQuota: costQuota,
+		TokenId:   task.PrivateData.TokenId,
+		Group:     task.Group,
+		Other:     other,
+		NodeName:  task.PrivateData.NodeName,
+	})
+	logger.LogInfo(ctx, fmt.Sprintf("任务 %s 写入成本额度 %s", task.TaskID, logger.LogQuota(*costQuota)))
 }

@@ -22,7 +22,6 @@ import { AnnouncementsSection } from './announcements-section'
 import { ApiInfoSection } from './api-info-section'
 import { ChatSettingsSection } from './chat-settings-section'
 import { DashboardSection } from './dashboard-section'
-import { DocsHandbookSection } from './docs-handbook-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
 import { UptimeKumaSection } from './uptime-kuma-section'
@@ -52,13 +51,6 @@ const CONTENT_SECTIONS = [
           ),
         }}
       />
-    ),
-  },
-  {
-    id: 'docs-handbook',
-    titleKey: 'Docs handbook',
-    build: (settings: ContentSettings) => (
-      <DocsHandbookSection defaultValue={settings['docs_setting.handbook']} />
     ),
   },
   {

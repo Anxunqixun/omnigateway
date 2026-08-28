@@ -1,120 +1,144 @@
 package controller
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/docs_setting"
 	"github.com/gin-gonic/gin"
 )
 
-type docsCatalogItem struct {
-	Id       string `json:"id"`
-	Title    string `json:"title"`
-	Category string `json:"category"`
-	Kind     string `json:"kind"`
-	Model    string `json:"model,omitempty"`
-}
-
-type docsPage struct {
-	docsCatalogItem
-	Markdown string `json:"markdown"`
-}
-
 func GetDocsCatalog(c *gin.Context) {
-	items := make([]docsCatalogItem, 0)
-	for _, page := range docs_setting.GetHandbook() {
-		if !page.Published {
-			continue
-		}
-		items = append(items, docsCatalogItem{
-			Id:       page.Id,
-			Title:    page.Title,
-			Category: page.Category,
-			Kind:     "handbook",
-		})
-	}
-	models, err := model.ListPublishedModelDocs()
+	channels, err := model.ListEnabledChannelsForDocs()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	for _, m := range models {
-		items = append(items, docsCatalogItem{
-			Id:       "model:" + m.ModelName,
-			Title:    m.ModelName,
-			Category: "models",
-			Kind:     "model",
-			Model:    m.ModelName,
-		})
+	base := publicDocsBaseURL(c)
+	items := service.BuildPublicDocsCatalog(channels)
+	rendered := make([]service.PublicDocsEndpoint, 0, len(items))
+	for _, item := range items {
+		rendered = append(rendered, service.RenderPublicDocsEndpoint(item, base))
 	}
 	common.ApiSuccess(c, gin.H{
-		"items":      items,
-		"templates":  gin.H{"chat": "chat", "image": "image", "video": "video"},
-		"base_url":   publicBaseURL(c),
+		"items":    rendered,
+		"base_url": base,
 	})
 }
 
 func GetDocsPage(c *gin.Context) {
 	slug := strings.TrimSpace(c.Param("slug"))
-	base := publicBaseURL(c)
-	if strings.HasPrefix(slug, "model:") {
-		name := strings.TrimPrefix(slug, "model:")
-		m, err := model.GetPublishedModelDoc(name)
-		if err != nil || m == nil {
-			common.ApiErrorMsg(c, "document not found")
-			return
-		}
-		common.ApiSuccess(c, docsPage{
-			docsCatalogItem: docsCatalogItem{
-				Id:       "model:" + m.ModelName,
-				Title:    m.ModelName,
-				Category: "models",
-				Kind:     "model",
-				Model:    m.ModelName,
-			},
-			Markdown: renderDocsPlaceholders(m.DocsMarkdown, m.ModelName, base),
-		})
+	channels, err := model.ListEnabledChannelsForDocs()
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
-	page, ok := docs_setting.GetHandbookPage(slug)
+	base := publicDocsBaseURL(c)
+	item, ok := service.FindPublicDocsEndpoint(service.BuildPublicDocsCatalog(channels), slug)
 	if !ok {
 		common.ApiErrorMsg(c, "document not found")
 		return
 	}
-	common.ApiSuccess(c, docsPage{
-		docsCatalogItem: docsCatalogItem{
-			Id:       page.Id,
-			Title:    page.Title,
-			Category: page.Category,
-			Kind:     "handbook",
-		},
-		Markdown: renderDocsPlaceholders(page.Markdown, "", base),
-	})
+	common.ApiSuccess(c, service.RenderPublicDocsEndpoint(item, base))
 }
 
-func GetDocsTemplate(c *gin.Context) {
-	kind := c.DefaultQuery("kind", "chat")
-	modelName := c.DefaultQuery("model", "{{MODEL_NAME}}")
+func GetAdminStandaloneDocs(c *gin.Context) {
+	channels, err := model.ListChannelsForAdminDocs()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	common.ApiSuccess(c, gin.H{
-		"kind":     kind,
-		"markdown": renderDocsPlaceholders(docs_setting.TemplateMarkdown(kind), modelName, publicBaseURL(c)),
+		"items": service.BuildAdminDocsItems(channels, docs_setting.GetStandalone()),
 	})
 }
 
-func publicBaseURL(c *gin.Context) string {
+func PutAdminStandaloneDocs(c *gin.Context) {
+	var req struct {
+		Items []docs_setting.StandaloneDoc `json:"items"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	items, err := docs_setting.NormalizeStandalone(req.Items)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	raw, err := common.Marshal(items)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.UpdateOption("docs_setting.standalone", string(raw)); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"items": docs_setting.GetStandalone(),
+	})
+}
+
+func PutAdminChannelDocs(c *gin.Context) {
+	channelId, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || channelId <= 0 {
+		common.ApiErrorMsg(c, "invalid channel id")
+		return
+	}
+	var req service.AdminDocsItem
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	channel, err := model.GetChannelById(channelId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	settings := channel.GetOtherSettings()
+	next, err := service.ApplyChannelAdminDoc(settings.ApiDocs, req.Model, req)
+	if err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return
+	}
+	settings.ApiDocs = next
+	if err := model.UpdateChannelOtherSettings(channelId, settings); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	model.InitChannelCache()
+	common.ApiSuccess(c, gin.H{})
+}
+
+func DeleteAdminChannelDocs(c *gin.Context) {
+	channelId, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || channelId <= 0 {
+		common.ApiErrorMsg(c, "invalid channel id")
+		return
+	}
+	channel, err := model.GetChannelById(channelId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	settings := channel.GetOtherSettings()
+	settings.ApiDocs = service.RemoveChannelAdminDoc(settings.ApiDocs, strings.TrimSpace(c.Query("model")))
+	if err := model.UpdateChannelOtherSettings(channelId, settings); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	model.InitChannelCache()
+	common.ApiSuccess(c, gin.H{})
+}
+
+func publicDocsBaseURL(c *gin.Context) string {
 	scheme := "http"
 	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
-	return scheme + "://" + c.Request.Host
-}
-
-func renderDocsPlaceholders(markdown, modelName, baseURL string) string {
-	out := strings.ReplaceAll(markdown, "{{BASE_URL}}", baseURL)
-	if modelName != "" {
-		out = strings.ReplaceAll(out, "{{MODEL_NAME}}", modelName)
-	}
-	return out
+	return service.PublicBaseURL(scheme, c.Request.Host)
 }

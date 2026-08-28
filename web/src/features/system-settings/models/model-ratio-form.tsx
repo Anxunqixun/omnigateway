@@ -59,6 +59,7 @@ type ModelFormValues = {
   ExposeRatioEnabled: boolean
   BillingMode: string
   BillingExpr: string
+  CostExpr: string
 }
 
 type ModelRatioFormProps = {
@@ -80,6 +81,7 @@ type ModelJsonFieldName =
   | 'ImageRatio'
   | 'AudioRatio'
   | 'AudioCompletionRatio'
+  | 'CostExpr'
 
 const modelJsonFields: Array<{
   name: ModelJsonFieldName
@@ -129,6 +131,12 @@ const modelJsonFields: Array<{
     name: 'AudioCompletionRatio',
     labelKey: 'Audio completion ratio',
     descriptionKey: 'Ratio applied to audio completions for streaming models.',
+  },
+  {
+    name: 'CostExpr',
+    labelKey: 'Cost expression',
+    descriptionKey:
+      'JSON map of model → cost formula. Never uses group ratio.',
   },
 ]
 
@@ -275,6 +283,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               savedAudioCompletionRatio={savedValues.AudioCompletionRatio}
               savedBillingMode={savedValues.BillingMode}
               savedBillingExpr={savedValues.BillingExpr}
+              savedCostExpr={savedValues.CostExpr}
               modelPrice={form.watch('ModelPrice')}
               modelRatio={form.watch('ModelRatio')}
               cacheRatio={form.watch('CacheRatio')}
@@ -285,6 +294,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               audioCompletionRatio={form.watch('AudioCompletionRatio')}
               billingMode={form.watch('BillingMode')}
               billingExpr={form.watch('BillingExpr')}
+              costExpr={form.watch('CostExpr')}
               candidateModelNames={
                 isUnsetVariant ? enabledModelsQuery.data?.data : undefined
               }
@@ -298,6 +308,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                 const fieldMap: Record<string, keyof ModelFormValues> = {
                   'billing_setting.billing_mode': 'BillingMode',
                   'billing_setting.billing_expr': 'BillingExpr',
+                  'billing_setting.cost_expr': 'CostExpr',
                 }
                 const formField =
                   fieldMap[field] || (field as keyof ModelFormValues)

@@ -92,6 +92,7 @@ import { cn } from '@/lib/utils'
 import { VCHART_OPTION } from '@/lib/vchart'
 import { useAuthStore } from '@/stores/auth-store'
 
+import { FlowChartGuard } from './flow-chart-guard'
 import { FlowNodeFilterControl } from './flow-node-filter'
 
 interface FlowChartsProps {
@@ -489,20 +490,31 @@ export function FlowCharts(props: FlowChartsProps) {
     flowError instanceof Error
       ? flowError.message
       : t('Please try again later.')
+  const chartErrorFallback = (
+    <div className='flex h-full items-center justify-center p-4'>
+      <Alert variant='destructive' className='max-w-md'>
+        <CircleAlert />
+        <AlertTitle>{t('Failed to load')}</AlertTitle>
+        <AlertDescription>{t('Please try again later.')}</AlertDescription>
+      </Alert>
+    </div>
+  )
   let chartContent = (
-    <VChart
-      key={`flow-${chartKey}`}
-      spec={{
-        ...flowSpec,
-        theme: chartTheme,
-        background: 'transparent',
-      }}
-      option={VCHART_OPTION}
-      onReady={(instance: IVChart) => {
-        chartInstanceRef.current = instance
-      }}
-      onPointerDown={handleChartPointerDown}
-    />
+    <FlowChartGuard key={`flow-guard-${chartKey}`} fallback={chartErrorFallback}>
+      <VChart
+        key={`flow-${chartKey}`}
+        spec={{
+          ...flowSpec,
+          theme: chartTheme,
+          background: 'transparent',
+        }}
+        option={VCHART_OPTION}
+        onReady={(instance: IVChart) => {
+          chartInstanceRef.current = instance
+        }}
+        onPointerDown={handleChartPointerDown}
+      />
+    </FlowChartGuard>
   )
   if (displayState === 'loading') {
     chartContent = <Skeleton className='h-full w-full' />

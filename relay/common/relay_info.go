@@ -936,6 +936,16 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 func (t *TaskSubmitReq) UnmarshalMetadata(v any) error {
 	metadata := t.Metadata
 	if metadata != nil {
+		filtered := make(map[string]interface{}, len(metadata))
+		for key, value := range metadata {
+			if key == "input_seconds" {
+				continue
+			}
+			filtered[key] = value
+		}
+		metadata = filtered
+	}
+	if metadata != nil {
 		metadataBytes, err := common.Marshal(metadata)
 		if err != nil {
 			return fmt.Errorf("marshal metadata failed: %w", err)

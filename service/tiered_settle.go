@@ -3,10 +3,12 @@ package service
 import (
 	"net/http"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -99,16 +101,17 @@ func refreshTieredBillingGroup(relayInfo *relaycommon.RelayInfo) (*billingexpr.B
 		return nil, nil
 	}
 	snap := relayInfo.TieredBillingSnapshot
-	if snap == nil || snap.BillingMode != "tiered_expr" {
+	if snap == nil || !billing_setting.UsesExprSell(snap.BillingMode) {
 		return nil, nil
 	}
 
 	groupRatio := relayInfo.PriceData.GroupRatioInfo.GroupRatio
+	userModelRatio := relayInfo.PriceData.EffectiveUserModelRatio()
 	if snap.GroupRatio == groupRatio {
 		return snap, nil
 	}
 
-	estimatedQuotaAfterGroup := snap.EstimatedQuotaBeforeGroup * groupRatio
+	estimatedQuotaAfterGroup := snap.EstimatedQuotaBeforeGroup * groupRatio * userModelRatio
 	estimatedQuota, err := billingexpr.QuotaRoundStrict(estimatedQuotaAfterGroup)
 	if err != nil {
 		return nil, err
@@ -162,7 +165,7 @@ func PrepareTieredBillingForSelectedGroup(c *gin.Context, relayInfo *relaycommon
 //   - ok=false, 0, nil        when it doesn't (caller should fall through to existing logic)
 func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenParams) (ok bool, quota int, result *billingexpr.TieredResult) {
 	snap := relayInfo.TieredBillingSnapshot
-	if snap == nil || snap.BillingMode != "tiered_expr" {
+	if snap == nil || !billing_setting.UsesExprSell(snap.BillingMode) {
 		return false, 0, nil
 	}
 
@@ -189,6 +192,19 @@ func TryTieredSettle(relayInfo *relaycommon.RelayInfo, params billingexpr.TokenP
 	// consume log records it under admin_info, regardless of which caller
 	// (text, audio, WSS) consumes the returned quota. First non-nil wins.
 	noteQuotaClamp(relayInfo, tr.Clamp)
+	applyUserModelRatioToTieredResult(&tr, snap, relayInfo.PriceData.EffectiveUserModelRatio())
+	noteQuotaClamp(relayInfo, tr.Clamp)
 
 	return true, tr.ActualQuotaAfterGroup, &tr
+}
+
+func applyUserModelRatioToTieredResult(tr *billingexpr.TieredResult, snap *billingexpr.BillingSnapshot, userModelRatio float64) {
+	if tr == nil || snap == nil || userModelRatio == 1 {
+		return
+	}
+	after, clamp := common.QuotaRoundChecked(tr.ActualQuotaBeforeGroup * snap.GroupRatio * userModelRatio)
+	tr.ActualQuotaAfterGroup = after
+	if clamp != nil {
+		tr.Clamp = clamp
+	}
 }

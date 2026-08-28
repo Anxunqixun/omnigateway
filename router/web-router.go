@@ -28,11 +28,24 @@ func SetWebRouter(router *gin.Engine, assets WebAssets) {
 	router.Use(static.Serve("/", frontendFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
-		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
+		if isBackendReservedPath(c.Request.RequestURI) {
 			controller.RelayNotFound(c)
 			return
 		}
 		c.Header("Cache-Control", "no-cache")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", assets.IndexPage)
 	})
+}
+
+// isBackendReservedPath reports whether a miss should stay an API/asset 404
+// instead of falling through to the SPA. "/api-docs" is a dashboard route and
+// must not match the "/api" prefix.
+func isBackendReservedPath(requestURI string) bool {
+	path := requestURI
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	return path == "/v1" || strings.HasPrefix(path, "/v1/") ||
+		path == "/api" || strings.HasPrefix(path, "/api/") ||
+		path == "/assets" || strings.HasPrefix(path, "/assets/")
 }

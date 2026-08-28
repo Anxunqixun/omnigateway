@@ -56,6 +56,8 @@ type textQuotaSummary struct {
 	ImageRatio             float64
 	ModelRatio             float64
 	GroupRatio             float64
+	UserModelRatio         float64
+	HasUserModelRatio      bool
 	ModelPrice             float64
 	CacheCreationRatio     float64
 	CacheCreationRatio5m   float64
@@ -66,6 +68,13 @@ type textQuotaSummary struct {
 	AudioInputPrice        float64
 	ToolSurchargeItems     []ToolSurchargeItem
 	ToolCallSurchargeQuota decimal.Decimal
+}
+
+func summaryUserModelRatio(summary textQuotaSummary) float64 {
+	if !summary.HasUserModelRatio {
+		return 1
+	}
+	return summary.UserModelRatio
 }
 
 // hasBillableUsage reports whether this request should incur any charge.
@@ -146,7 +155,7 @@ func mergeToolSurchargeItems(items []ToolSurchargeItem) []ToolSurchargeItem {
 }
 
 func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
-	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
+	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio).Mul(decimal.NewFromFloat(summaryUserModelRatio(*summary)))
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 
 	var items []ToolSurchargeItem
@@ -209,6 +218,7 @@ func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaS
 		if snap := relayInfo.TieredBillingSnapshot; snap != nil {
 			quota, clamp := common.QuotaFromDecimalChecked(decimal.NewFromFloat(tieredResult.ActualQuotaBeforeGroup).
 				Mul(decimal.NewFromFloat(snap.GroupRatio)).
+				Mul(decimal.NewFromFloat(relayInfo.PriceData.EffectiveUserModelRatio())).
 				Add(summary.ToolCallSurchargeQuota))
 			noteQuotaClamp(relayInfo, clamp)
 			return quota
@@ -238,6 +248,8 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 		ImageRatio:           relayInfo.PriceData.ImageRatio,
 		ModelRatio:           relayInfo.PriceData.ModelRatio,
 		GroupRatio:           relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+		UserModelRatio:       relayInfo.PriceData.UserModelRatio,
+		HasUserModelRatio:    relayInfo.PriceData.HasUserModelRatio,
 		ModelPrice:           relayInfo.PriceData.ModelPrice,
 		CacheCreationRatio:   relayInfo.PriceData.CacheCreationRatio,
 		CacheCreationRatio5m: relayInfo.PriceData.CacheCreation5mRatio,
@@ -290,7 +302,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	dCacheRatio := decimal.NewFromFloat(summary.CacheRatio)
 	dImageRatio := decimal.NewFromFloat(summary.ImageRatio)
 	dModelRatio := decimal.NewFromFloat(summary.ModelRatio)
-	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
+	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio).Mul(decimal.NewFromFloat(summaryUserModelRatio(summary)))
 	dModelPrice := decimal.NewFromFloat(summary.ModelPrice)
 	dCacheCreationRatio := decimal.NewFromFloat(summary.CacheCreationRatio)
 	dCacheCreationRatio5m := decimal.NewFromFloat(summary.CacheCreationRatio5m)
@@ -428,6 +440,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			Mul(decimal.NewFromInt(int64(item.Count))).
 			Div(decimal.NewFromInt(1000)).
 			Mul(decimal.NewFromFloat(summary.GroupRatio)).
+			Mul(decimal.NewFromFloat(summaryUserModelRatio(summary))).
 			Mul(decimal.NewFromFloat(common.QuotaPerUnit))
 		extraContent = append(extraContent, fmt.Sprintf(
 			"%s 调用 %d 次，调用花费 %s",
@@ -437,7 +450,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		))
 	}
 	if summary.AudioInputPrice > 0 && summary.AudioTokens > 0 {
-		q := decimal.NewFromFloat(summary.AudioInputPrice).Div(decimal.NewFromInt(1000000)).Mul(decimal.NewFromInt(int64(summary.AudioTokens))).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+		q := decimal.NewFromFloat(summary.AudioInputPrice).Div(decimal.NewFromInt(1000000)).Mul(decimal.NewFromInt(int64(summary.AudioTokens))).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(summaryUserModelRatio(summary))).Mul(decimal.NewFromFloat(common.QuotaPerUnit))
 		extraContent = append(extraContent, fmt.Sprintf("Audio Input 花费 %s", logger.LogQuota(common.QuotaFromDecimal(q))))
 	}
 

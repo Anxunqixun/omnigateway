@@ -1,7 +1,10 @@
 package service
 
 import (
+	"strings"
+
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
@@ -12,7 +15,15 @@ import (
 // returns (nil, nil) so the dashboard can show "—".
 func ComputeCostQuota(modelName string, input billingexpr.RequestInput, params billingexpr.TokenParams, costRatio float64) (*int, error) {
 	expr, ok := billing_setting.GetCostExpr(modelName)
-	if !ok || expr == "" {
+	if !ok || strings.TrimSpace(expr) == "" {
+		return nil, nil
+	}
+	return ComputeCostQuotaFromExpr(modelName, expr, input, params, costRatio)
+}
+
+func ComputeCostQuotaFromExpr(modelName, expr string, input billingexpr.RequestInput, params billingexpr.TokenParams, costRatio float64) (*int, error) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
 		return nil, nil
 	}
 	if input.UsageAliases == nil {
@@ -77,12 +88,28 @@ func AttachDualLedger(other map[string]interface{}, relayInfo *relaycommon.Relay
 	return cost
 }
 
-func attachTaskDualLedger(other map[string]interface{}, modelName string, sellQuota int, input billingexpr.RequestInput, params billingexpr.TokenParams) *int {
+func resolveTaskCostExpr(task *model.Task) string {
+	if task == nil {
+		return ""
+	}
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		if expr := strings.TrimSpace(bc.CostExpr); expr != "" {
+			return expr
+		}
+	}
+	expr, ok := billing_setting.GetCostExpr(taskModelName(task))
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(expr)
+}
+
+func attachTaskDualLedger(other map[string]interface{}, task *model.Task, sellQuota int, input billingexpr.RequestInput, params billingexpr.TokenParams) *int {
 	if other == nil {
 		return nil
 	}
 	other["sell_quota"] = sellQuota
-	cost, err := ComputeCostQuota(modelName, input, params, 0)
+	cost, err := ComputeCostQuotaFromExpr(taskModelName(task), resolveTaskCostExpr(task), input, params, 0)
 	if err != nil {
 		other["cost_unknown"] = true
 		adminInfo, _ := other["admin_info"].(map[string]interface{})
@@ -109,4 +136,3 @@ func tokenParamsFromCounts(prompt, completion int) billingexpr.TokenParams {
 		Len: float64(prompt),
 	}
 }
-

@@ -28,7 +28,7 @@ import {
   type BillingVar,
   type ParsedTier,
 } from './billing-expr'
-import { getDisplayGroupRatio } from './model-helpers'
+import { getDisplayGroupRatio, getUserModelSellRatio } from './model-helpers'
 
 type DynamicPriceOptions = {
   tokenUnit: TokenUnit
@@ -36,6 +36,7 @@ type DynamicPriceOptions = {
   priceRate?: number
   usdExchangeRate?: number
   groupRatioMultiplier?: number
+  userModelRatioMultiplier?: number
 }
 
 export type DynamicPriceEntry = {
@@ -63,7 +64,11 @@ export type DynamicPricingSummary = {
 const PRIMARY_DYNAMIC_FIELDS = new Set(['inputPrice', 'outputPrice'])
 
 export function isDynamicPricingModel(model: PricingModel): boolean {
-  return model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
+  return (
+    (model.billing_mode === 'tiered_expr' ||
+      model.billing_mode === 'formula') &&
+    Boolean(model.billing_expr)
+  )
 }
 
 export function getDynamicDisplayGroupRatio(
@@ -88,10 +93,11 @@ export function formatDynamicUnitPrice(
   options: DynamicPriceOptions
 ): string {
   const groupRatio = options.groupRatioMultiplier ?? 1
+  const userRatio = options.userModelRatioMultiplier ?? 1
   const priceRate = options.priceRate ?? 1
   const usdExchangeRate = options.usdExchangeRate ?? 1
   const priceUSD =
-    (valuePerMillionTokens * groupRatio) /
+    (valuePerMillionTokens * groupRatio * userRatio) /
     TOKEN_UNIT_DIVISORS[options.tokenUnit]
   const displayPrice = applyRechargeRate(
     priceUSD,
@@ -158,6 +164,12 @@ export function getDynamicPricingSummary(
   options: DynamicPriceOptions
 ): DynamicPricingSummary | null {
   if (!isDynamicPricingModel(model)) return null
+
+  options = {
+    ...options,
+    userModelRatioMultiplier:
+      options.userModelRatioMultiplier ?? getUserModelSellRatio(model),
+  }
 
   const tiers = getDynamicPricingTiers(model)
   const tier = tiers[0] || null

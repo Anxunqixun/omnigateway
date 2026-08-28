@@ -33,6 +33,23 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 	return filtered
 }
 
+func applyUserModelRatioToPricing(pricing []model.Pricing, raw string) []model.Pricing {
+	if len(pricing) == 0 {
+		return pricing
+	}
+	out := make([]model.Pricing, len(pricing))
+	copy(out, pricing)
+	for i := range out {
+		ratio, ok := model.LookupUserModelRatio(raw, out[i].ModelName)
+		if !ok {
+			out[i].UserModelRatio = 1
+			continue
+		}
+		out[i].UserModelRatio = ratio
+	}
+	return out
+}
+
 func GetPricing(c *gin.Context) {
 	pricing := model.GetPricing()
 	userId, exists := c.Get("id")
@@ -42,10 +59,12 @@ func GetPricing(c *gin.Context) {
 		groupRatio[s] = f
 	}
 	var group string
+	userModelRatioJSON := ""
 	if exists {
 		user, err := model.GetUserCache(userId.(int))
 		if err == nil {
 			group = user.Group
+			userModelRatioJSON = user.ModelRatio
 			for g := range groupRatio {
 				ratio, ok := ratio_setting.GetGroupGroupRatio(group, g)
 				if ok {
@@ -57,6 +76,7 @@ func GetPricing(c *gin.Context) {
 
 	usableGroup = service.GetUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
+	pricing = applyUserModelRatioToPricing(pricing, userModelRatioJSON)
 	// check groupRatio contains usableGroup
 	for group := range ratio_setting.GetGroupRatioCopy() {
 		if _, ok := usableGroup[group]; !ok {

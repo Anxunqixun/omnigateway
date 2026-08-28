@@ -67,7 +67,11 @@ import {
   isDynamicPricingModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
+import {
+  getAvailableGroups,
+  getUserModelSellRatio,
+  isTokenBasedModel,
+} from '../lib/model-helpers'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
 import type {
   ModelCapability,
@@ -940,12 +944,14 @@ function GroupPricingSection(props: {
       )
     }
 
+    const userModelRatio = getUserModelSellRatio(props.model)
     const priceFields = getDynamicPriceFields(dynamicTiers, {
       tokenUnit: props.tokenUnit,
       showRechargePrice,
       priceRate: props.priceRate,
       usdExchangeRate: props.usdExchangeRate,
       groupRatioMultiplier: 1,
+      userModelRatioMultiplier: userModelRatio,
     })
     const formattedPricesByGroup = new Map(
       availableGroups.map((group) => {
@@ -958,6 +964,7 @@ function GroupPricingSection(props: {
             priceRate: props.priceRate,
             usdExchangeRate: props.usdExchangeRate,
             groupRatioMultiplier: ratio,
+            userModelRatioMultiplier: userModelRatio,
           }),
         ] as const
       })
@@ -1141,9 +1148,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const { t } = useTranslation()
   const showRechargePrice = props.showRechargePrice ?? false
 
-  const isDynamic =
-    props.model.billing_mode === 'tiered_expr' &&
-    Boolean(props.model.billing_expr)
+  const isDynamic = isDynamicPricingModel(props.model)
 
   return (
     <div className='@container/details space-y-4'>

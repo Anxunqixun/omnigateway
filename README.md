@@ -61,6 +61,8 @@
 > - Users should ensure their use complies with upstream terms of service and applicable laws and regulations.
 > - When providing generative AI services to the public, users should comply with applicable regulatory requirements and fulfill all filing, licensing, content safety, real-name verification, log retention, tax, and upstream authorization obligations required by their jurisdiction.
 
+> This repository is a downstream overlay of QuantumNous/new-api **v1.0.0-rc.26**. Overlay features, GHCR images, and deployment notes: [docs/omnigateway/README.md](docs/omnigateway/README.md).
+
 ---
 
 ## 🤝 Trusted Partners

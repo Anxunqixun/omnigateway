@@ -27,7 +27,7 @@ import { quotaUnitsToDollars } from '@/lib/format'
 import { ROLE } from '@/lib/roles'
 
 import { DEFAULT_GROUP } from '../constants'
-import { type UserFormData, type User } from '../types'
+import type { UserFormData, User } from '../types'
 
 // ============================================================================
 // Form Schema
@@ -41,12 +41,38 @@ export const userFormSchema = z.object({
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
+  model_ratio_rows: z
+    .array(
+      z.object({
+        id: z.string(),
+        model: z.string(),
+        ratio: z.string(),
+      })
+    )
+    .optional(),
   admin_permissions: z
     .record(z.string(), z.record(z.string(), z.boolean()))
     .optional(),
 })
 
 export type UserFormValues = z.infer<typeof userFormSchema>
+
+export type UserModelRatioRow = {
+  id: string
+  model: string
+  ratio: string
+}
+
+function newUserModelRatioRowId(): string {
+  return crypto.randomUUID()
+}
+
+export function createUserModelRatioRow(
+  model = '',
+  ratio = '1'
+): UserModelRatioRow {
+  return { id: newUserModelRatioRowId(), model, ratio }
+}
 
 // ============================================================================
 // Form Defaults
@@ -60,8 +86,47 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   quota_dollars: 0,
   group: DEFAULT_GROUP,
   remark: '',
+  model_ratio_rows: [createUserModelRatioRow()],
   // Filled against the backend catalog at render time; see UsersMutateDrawer.
   admin_permissions: {},
+}
+
+export function parseUserModelRatioRows(raw?: string): UserModelRatioRow[] {
+  const trimmed = raw?.trim()
+  if (!trimmed) return []
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return []
+    }
+    return Object.entries(parsed).flatMap(([model, value]) => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        return []
+      }
+      return [{ id: newUserModelRatioRowId(), model, ratio: String(value) }]
+    })
+  } catch {
+    return []
+  }
+}
+
+export function serializeUserModelRatioRows(
+  rows: UserModelRatioRow[]
+): { ok: true; value: string } | { ok: false; message: string } {
+  const out: Record<string, number> = {}
+  for (const row of rows) {
+    const model = row.model.trim()
+    if (!model) continue
+    const ratio = Number(row.ratio)
+    if (!Number.isFinite(ratio) || ratio < 0) {
+      return { ok: false, message: 'Invalid model sell ratio' }
+    }
+    out[model] = ratio
+  }
+  if (Object.keys(out).length === 0) {
+    return { ok: true, value: '' }
+  }
+  return { ok: true, value: JSON.stringify(out) }
 }
 
 // ============================================================================
@@ -94,7 +159,12 @@ export function transformFormDataToPayload(
     )
   }
 
-  // For create: only send required fields
+  const serialized = serializeUserModelRatioRows(data.model_ratio_rows ?? [])
+  if (serialized.ok) {
+    payload.model_ratio = serialized.value
+  }
+
+  // For create: only send required fields plus optional model sell ratios
   if (userId === undefined) {
     payload.role = role
   } else {
@@ -113,6 +183,7 @@ export function transformFormDataToPayload(
  * the catalog at render time in UsersMutateDrawer.
  */
 export function transformUserToFormDefaults(user: User): UserFormValues {
+  const modelRatioRows = parseUserModelRatioRows(user.model_ratio)
   return {
     username: user.username,
     display_name: user.display_name,
@@ -121,6 +192,8 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',
+    model_ratio_rows:
+      modelRatioRows.length > 0 ? modelRatioRows : [createUserModelRatioRow()],
     admin_permissions: user.admin_permissions ?? {},
   }
 }

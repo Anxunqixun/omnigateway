@@ -24,6 +24,7 @@ export * from './model-utils'
 
 // Form schemas and transformers
 export * from './model-form'
+export * from './model-drawer-pricing'
 
 // Actions
 export * from './model-actions'
